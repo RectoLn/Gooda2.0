@@ -84,7 +84,6 @@ export function createRequest(baseURL) {
 // 默认请求实例 — 指向千岛 OpenAPI
 export const api = createRequest("https://openapi.qiandao.com");
 
-// 后端服务请求实例 — 指向 FC 函数
-const BACKEND_BASE =
-  "https://qdmp-ecnwdsxjkf-epptunuweu.cn-shanghai.fcapp.run";
+// 后端服务请求实例 — 填入你的后端服务地址
+const BACKEND_BASE = "";
 export const backendApi = createRequest(BACKEND_BASE);
