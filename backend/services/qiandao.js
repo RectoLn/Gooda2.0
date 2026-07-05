@@ -18,12 +18,22 @@ const REFRESH_THRESHOLD_SEC = 300
 // 凭证：环境变量优先（部署环境）；本地开发兜底读项目根 qdmp.json（平台约定该文件
 // 可含 appSecret；本仓库的 qdmp.json 目前只有 appId，secret 建议放 backend/.env.local）。
 function readQdmpJson() {
-  try {
-    const raw = fs.readFileSync(path.join(__dirname, '..', '..', 'qdmp.json'), 'utf8')
-    return JSON.parse(raw)
-  } catch (_) {
-    return {}
+  const candidates = [
+    // qdmp deploy package root, useful when credentials are provided as a
+    // runtime-side config file instead of environment variables.
+    path.join(__dirname, '..', 'qdmp.json'),
+    // Local monorepo root during development.
+    path.join(__dirname, '..', '..', 'qdmp.json'),
+  ]
+  for (const file of candidates) {
+    try {
+      const raw = fs.readFileSync(file, 'utf8')
+      return JSON.parse(raw)
+    } catch (_) {
+      // Try the next known layout.
+    }
   }
+  return {}
 }
 
 function credentials() {

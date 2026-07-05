@@ -2,5 +2,6 @@
   "appId": "echocoWvNEQuDVoKf1Ct",
   "loader": "EMP",
   "name": "谷搭3",
+  "runtime": "nodejs22",
   "latest": "6"
 }
