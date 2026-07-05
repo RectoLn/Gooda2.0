@@ -68,6 +68,24 @@ const OUT = process.argv[2] || '/tmp/dimina-export.png'
     body: (document.body.innerText || '').replace(/\s+/g, ' ').slice(0, 120),
   })).catch((e) => ({ err: e.message }))
   console.log('after-export state:', JSON.stringify(state))
+  // tap the SAVE button inside the export preview
+  const savedTap = await appFrame.evaluate(() => {
+    const el = document.querySelector('.export-save-btn')
+    if (!el) return 'no-save-btn'
+    const r = el.getBoundingClientRect()
+    const opts = { bubbles: true, cancelable: true, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 }
+    el.dispatchEvent(new TouchEvent('touchstart', opts))
+    el.dispatchEvent(new TouchEvent('touchend', opts))
+    el.dispatchEvent(new MouseEvent('click', opts))
+    return 'tapped'
+  })
+  console.log('save tap:', savedTap)
+  await sleep(6000)
+  const afterSave = await appFrame.evaluate(() => ({
+    modal: (document.querySelector('.dimina-modal, [class*="modal"]')?.textContent || '').replace(/\s+/g, ' ').slice(0, 100),
+    toast: (document.querySelector('[class*="toast"]')?.textContent || '').slice(0, 60),
+  })).catch((e) => ({ err: e.message }))
+  console.log('after-save state:', JSON.stringify(afterSave))
   await pg.screenshot({ path: OUT })
   console.log('screenshot ->', OUT)
   await b.close()

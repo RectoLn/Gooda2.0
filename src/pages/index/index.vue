@@ -312,7 +312,7 @@ import {
 import { createKvStore } from '../../services/storage/kv-store'
 import { cropImageFrame, normalizeCropRect, denormalizeCropRect } from './crop-math'
 import { measureRect } from '../../platform/measure'
-import { imageSizeFromLocalFile, imageSourceToDataUrl, remoteImageToDataUrl } from '../../platform/image-io'
+import { imageSizeFromLocalFile, imageSourceToDataUrl, remoteImageToDataUrl, dataUrlToTempFileNative } from '../../platform/image-io'
 import { resolveQiandaoSpuService, QiandaoSpuServiceError } from '../../services/qiandao/client'
 import { bestSpuImage, inferGuziSubFromSpu } from '../../services/qiandao/types'
 import type { QiandaoSpuSummary } from '../../services/qiandao/types'
@@ -2783,16 +2783,43 @@ async function saveH5ExportImage(src: string) {
   Taro.showToast({ title: '请长按图片保存', icon: 'none' })
 }
 
+function saveError(detail: string) {
+  console.warn('[gooda-export] save failed', detail)
+  Taro.showModal({ title: '保存失败', content: detail, showCancel: false, confirmText: '知道了' })
+}
+
 async function saveExportImage() {
   if (!resultSrc.value) return
   if (process.env.TARO_ENV === 'h5') {
     await saveH5ExportImage(resultSrc.value)
     return
   }
+  // 原生（Dimina/千岛）：saveImageToPhotosAlbum 只认真实文件路径。导出得到的是
+  // data URL（canvasToTempFilePath 在 Dimina 返回 toDataURL），Android 的
+  // isLegalPath 会直接判定 data URL 非法而"静默不保存"——表现为点击没反应。
+  // 先把 data URL 落成 difile:// 真实文件，再存相册。
+  let filePath = resultSrc.value
+  if (filePath.startsWith('data:')) {
+    Taro.showLoading({ title: '保存中' })
+    try {
+      filePath = await dataUrlToTempFileNative(filePath)
+    } finally {
+      Taro.hideLoading()
+    }
+  }
+  if (!filePath || filePath.startsWith('data:')) {
+    saveError('无法写入临时文件（getFileSystemManager.writeFile 不可用或失败）')
+    return
+  }
   Taro.saveImageToPhotosAlbum({
-    filePath: resultSrc.value,
-    success: () => Taro.showToast({ title: '已保存图片', icon: 'none' }),
-    fail: () => Taro.showToast({ title: '保存失败，请检查相册权限', icon: 'none' }),
+    filePath,
+    success: () => Taro.showToast({ title: '已保存到相册', icon: 'none' }),
+    // Dimina 回调以 [result] 数组形态回传，取首元素拿真实 errMsg。
+    fail: (err: any) => {
+      const e = Array.isArray(err) ? err[0] : err
+      const msg = (e && (e.errMsg || e.message)) || '请检查相册权限'
+      saveError(String(msg))
+    },
   })
 }
 </script>

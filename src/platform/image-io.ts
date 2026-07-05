@@ -55,6 +55,38 @@ export async function imageSourceToDataUrlNative(src: string) {
   })
 }
 
+// Native: persist a data URL to a REAL file under USER_DATA_PATH and return its
+// difile:// path. saveImageToPhotosAlbum needs a real file path — Android's
+// isLegalPath() requires a `difile://` prefix and silently ignores a data URL
+// (no callback fired → "保存没反应"); iOS needs a path UIImage can open. A ~4s
+// timeout guards against a runtime whose writeFile callback never fires so the
+// caller can surface an error instead of hanging on the spinner.
+export async function dataUrlToTempFileNative(dataUrl: string): Promise<string> {
+  if (!dataUrl.startsWith('data:')) return dataUrl
+  const fs = (Taro as any).getFileSystemManager?.()
+  const base = (Taro as any).env?.USER_DATA_PATH || 'difile://usr'
+  const comma = dataUrl.indexOf(',')
+  const base64 = comma >= 0 ? dataUrl.slice(comma + 1) : ''
+  if (!fs?.writeFile || !base64) return ''
+  const filePath = `${base}/gooda-export-${Date.now()}.png`
+  return await new Promise<string>((resolve) => {
+    let done = false
+    const finish = (v: string) => { if (!done) { done = true; resolve(v) } }
+    const timer = setTimeout(() => finish(''), 4000)
+    fs.writeFile({
+      filePath,
+      data: base64,
+      encoding: 'base64',
+      success: () => { clearTimeout(timer); finish(filePath) },
+      fail: (err: any) => {
+        clearTimeout(timer)
+        console.warn('[gooda-export] writeFile failed', err)
+        finish('')
+      },
+    })
+  })
+}
+
 // Convert any image source to a data URL. H5 uses fetch+FileReader (falls back to a
 // canvas re-encode); native falls back to the filesystem reader. Storing a data URL
 // (not a temp path, which expires) is required for persisted user assets.
