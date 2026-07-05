@@ -503,6 +503,10 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
    overflow: hidden;
 }
 
+.layer-inner.has-image {
+   box-shadow: none;
+}
+
 .board-edit-layer {
    overflow: visible;
 }
@@ -549,6 +553,11 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
    opacity: .38;
    mix-blend-mode: soft-light;
    pointer-events: none;
+}
+
+.layer-inner.has-image::before,
+.layer-inner.has-image::after {
+   display: none;
 }
 
 .layer-inner.circle, .cell-block.circle, .layer-dot.circle {
@@ -2662,6 +2671,7 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
    flex: 1 1 auto;
    min-height: 160PX;
    overflow-y: auto;
+   overflow-x: hidden;
    -webkit-overflow-scrolling: touch;
 }
 .spu-status {
@@ -2697,11 +2707,17 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
 }
 .spu-grid {
    display: grid;
-   grid-template-columns: repeat(3, 1fr);
-   gap: 10PX;
+   grid-template-columns: repeat(3, minmax(0, 1fr));
+   column-gap: 8PX;
+   row-gap: 10PX;
    padding-bottom: 8PX;
+   width: 100%;
+   box-sizing: border-box;
 }
 .spu-card {
+   min-width: 0;
+   width: 100%;
+   height: 152PX;
    display: flex;
    flex-direction: column;
    align-items: center;
@@ -2710,18 +2726,23 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
    border-radius: 14PX;
    background: rgba(255,255,255,.5);
    box-shadow: inset 0 0 0 1PX rgba(95,149,199,.12), 0 3PX 10PX rgba(31,101,183,.05);
+   box-sizing: border-box;
+   overflow: hidden;
 }
 .spu-card-imgbox {
    position: relative;
-   width: 76PX;
-   height: 76PX;
+   width: 70PX;
+   height: 70PX;
+   flex: 0 0 70PX;
    display: flex;
    align-items: center;
    justify-content: center;
+   overflow: hidden;
 }
 .spu-card-img {
    width: 100%;
    height: 100%;
+   display: block;
 }
 .spu-card-noimg {
    width: 100%;
@@ -2746,24 +2767,37 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
    color: #2c7a58;
 }
 .spu-card-title {
+   width: 100%;
    max-width: 100%;
+   height: 34PX;
    font-size: 12PX;
    line-height: 17PX;
    color: #1d1d1f;
    overflow: hidden;
-   text-overflow: ellipsis;
-   white-space: nowrap;
+   display: -webkit-box;
+   -webkit-line-clamp: 2;
+   -webkit-box-orient: vertical;
+   word-break: break-all;
+   text-align: center;
 }
 .spu-card-type {
+   width: 100%;
+   height: 14PX;
    font-size: 10PX;
    line-height: 14PX;
    color: rgba(60,60,67,.45);
+   overflow: hidden;
+   text-overflow: ellipsis;
+   white-space: nowrap;
+   text-align: center;
 }
 .spu-card-import {
    margin-top: 2PX;
-   min-width: 56PX;
+   width: 62PX;
+   max-width: 100%;
    height: 26PX;
    padding: 0 10PX;
+   flex: 0 0 26PX;
    border-radius: 9PX;
    display: flex;
    align-items: center;
@@ -2773,6 +2807,9 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
    background: rgba(31,101,183,.12);
    color: #1b5fae;
    box-shadow: inset 0 0 0 1PX rgba(31,101,183,.20);
+   box-sizing: border-box;
+   overflow: hidden;
+   white-space: nowrap;
 }
 .spu-card-import.owned {
    background: rgba(255,255,255,.35);

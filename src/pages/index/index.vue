@@ -89,8 +89,8 @@
           >
             <view
               class="layer-inner"
-              :class="ly.shape"
-              :style="{ background: ly.color, opacity: ly.opacity, transform: ly.flipX ? 'scaleX(-1)' : 'none' }"
+              :class="[ly.shape, { 'has-image': !!ly.src }]"
+              :style="{ background: ly.src ? 'transparent' : ly.color, opacity: ly.opacity, transform: ly.flipX ? 'scaleX(-1)' : 'none' }"
             >
               <image
                 v-if="ly.src && ly.crop"
@@ -2197,7 +2197,7 @@ async function createImportedAsset(src: string, options?: { type?: UserAsset['ty
     type,
     sub,
     label: (options?.label || '').trim() || (sub === '其他' ? '导入图片' : sub),
-    color: '#fff',
+    color: options?.spuId ? 'transparent' : '#fff',
     w: size.w,
     h: size.h,
     shape,
@@ -2499,7 +2499,7 @@ async function createSpuAsset(src: string, spu: QiandaoSpuSummary, sub: string, 
     type: '谷子',
     sub,
     label: spuAssetLabel(spu, sub),
-    color: '#fff',
+    color: 'transparent',
     w: box.w,
     h: box.h,
     shape,
