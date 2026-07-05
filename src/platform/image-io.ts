@@ -55,36 +55,86 @@ export async function imageSourceToDataUrlNative(src: string) {
   })
 }
 
+function firstResult(r: any) {
+  return Array.isArray(r) ? r[0] : r
+}
+function errText(err: any): string {
+  const e = firstResult(err)
+  return (e && (e.errMsg || e.message)) || ''
+}
+
+// Read back the first bytes and check the PNG magic (base64 "iVBORw0KGgo"),
+// so we can tell a valid image file from a runtime that wrote garbage (e.g. a
+// strict base64 decoder that fell back to writing the base64 TEXT).
+function verifyPngFile(fs: any, filePath: string): Promise<string> {
+  if (!fs?.readFile) return Promise.resolve('ok') // can't verify → assume ok
+  return new Promise((resolve) => {
+    let done = false
+    const finish = (v: string) => { if (!done) { done = true; resolve(v) } }
+    const timer = setTimeout(() => finish('ok'), 3000) // don't block save on a slow read
+    fs.readFile({
+      filePath,
+      encoding: 'base64',
+      position: 0,
+      length: 32,
+      success: (res: any) => {
+        clearTimeout(timer)
+        const data = (firstResult(res)?.data) || ''
+        finish(typeof data === 'string' && data.startsWith('iVBORw0KGgo') ? 'ok' : `badsig:${String(data).slice(0, 10)}`)
+      },
+      fail: () => { clearTimeout(timer); finish('ok') },
+    })
+  })
+}
+
 // Native: persist a data URL to a REAL file under USER_DATA_PATH and return its
 // difile:// path. saveImageToPhotosAlbum needs a real file path — Android's
 // isLegalPath() requires a `difile://` prefix and silently ignores a data URL
-// (no callback fired → "保存没反应"); iOS needs a path UIImage can open. A ~4s
-// timeout guards against a runtime whose writeFile callback never fires so the
-// caller can surface an error instead of hanging on the spinner.
-export async function dataUrlToTempFileNative(dataUrl: string): Promise<string> {
-  if (!dataUrl.startsWith('data:')) return dataUrl
+// (no callback fired → "保存没反应"); iOS's UIImage(contentsOfFile:) needs a
+// decodable image file. Returns { path, diag }: path='' on failure, diag carries
+// a human-readable reason for the caller to surface. A ~4s timeout guards against
+// a runtime whose writeFile callback never fires (avoids a stuck spinner).
+export async function dataUrlToTempFileNative(dataUrl: string): Promise<{ path: string; diag: string }> {
+  if (!dataUrl.startsWith('data:')) return { path: dataUrl, diag: 'passthrough' }
   const fs = (Taro as any).getFileSystemManager?.()
   const base = (Taro as any).env?.USER_DATA_PATH || 'difile://usr'
   const comma = dataUrl.indexOf(',')
   const base64 = comma >= 0 ? dataUrl.slice(comma + 1) : ''
-  if (!fs?.writeFile || !base64) return ''
+  if (!fs?.writeFile || !base64) return { path: '', diag: `writeFile 不可用(fs=${!!fs?.writeFile}, b64=${base64.length})` }
   const filePath = `${base}/gooda-export-${Date.now()}.png`
-  return await new Promise<string>((resolve) => {
+  // Prefer writing an ArrayBuffer: it goes through Dimina's tested arraybuffer→
+  // base64 native decode path and sidesteps strict base64-string decoders that
+  // silently write the raw base64 text instead of the decoded bytes → black image.
+  let data: any = base64
+  let encoding: string | undefined = 'base64'
+  try {
+    const bytes = base64ToBytes(base64)
+    if (bytes && bytes.length > 8) {
+      data = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
+      encoding = undefined
+    }
+  } catch (_) { /* fall back to base64 string */ }
+  const wrote = await new Promise<string>((resolve) => {
     let done = false
     const finish = (v: string) => { if (!done) { done = true; resolve(v) } }
-    const timer = setTimeout(() => finish(''), 4000)
-    fs.writeFile({
+    const timer = setTimeout(() => finish('写入超时'), 4000)
+    const opts: any = {
       filePath,
-      data: base64,
-      encoding: 'base64',
-      success: () => { clearTimeout(timer); finish(filePath) },
+      data,
+      success: () => { clearTimeout(timer); finish('') },
       fail: (err: any) => {
         clearTimeout(timer)
         console.warn('[gooda-export] writeFile failed', err)
-        finish('')
+        finish(errText(err) || '写入失败')
       },
-    })
+    }
+    if (encoding) opts.encoding = encoding
+    fs.writeFile(opts)
   })
+  if (wrote) return { path: '', diag: `写文件失败：${wrote}` }
+  const sig = await verifyPngFile(fs, filePath)
+  if (sig !== 'ok') return { path: '', diag: `文件校验失败(${sig})：图片未正确编码` }
+  return { path: filePath, diag: 'ok' }
 }
 
 // Convert any image source to a data URL. H5 uses fetch+FileReader (falls back to a

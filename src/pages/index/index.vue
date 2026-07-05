@@ -2818,10 +2818,17 @@ async function saveExportImage() {
   let filePath = resultSrc.value
   if (filePath.startsWith('data:')) {
     Taro.showLoading({ title: '保存中' })
+    let diag = 'ok'
     try {
-      filePath = await dataUrlToTempFileNative(filePath)
+      const res = await dataUrlToTempFileNative(filePath)
+      filePath = res.path
+      diag = res.diag
     } finally {
       Taro.hideLoading()
+    }
+    if (!filePath) {
+      saveError(diag)
+      return
     }
   }
   if (!filePath || filePath.startsWith('data:')) {
