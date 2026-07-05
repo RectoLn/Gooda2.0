@@ -617,8 +617,8 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
 .layer-handle {
    position: absolute;
    z-index: 40;
-   width: 28PX;
-   height: 28PX;
+   width: 27PX;
+   height: 27PX;
    border-radius: 999PX;
    background: transparent;
    border: 0;
@@ -640,12 +640,12 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
    position: absolute;
    left: 50%;
    top: 50%;
-   width: 18PX;
-   height: 18PX;
+   width: 20PX;
+   height: 20PX;
    border-radius: 999PX;
    transform: translate(-50%, -50%);
-   background: rgba(255,255,255,.92);
-   box-shadow: 0 2PX 7PX rgba(15,23,42,.14), inset 0 0 0 1PX rgba(31,101,183,.10);
+   background: #fff;
+   box-shadow: 0 2PX 7PX rgba(15,23,42,.14), inset 0 0 0 1PX rgba(31,101,183,.12);
    pointer-events: none;
 }
 
@@ -1707,10 +1707,13 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
 
 .export-canvas {
    position: fixed;
-   left: -9999PX;
-   top: -9999PX;
-   width: 1280PX;
-   height: 1280PX;
+   left: 0;
+   top: 0;
+   width: 1PX;
+   height: 1PX;
+   opacity: 0;
+   pointer-events: none;
+   z-index: -1;
 }
 
 .export-history-mask {

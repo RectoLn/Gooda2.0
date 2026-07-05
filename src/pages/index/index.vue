@@ -2689,23 +2689,32 @@ async function exportImage() {
   resultSrc.value = ''
   resultPreviewOpen.value = false
   exportHistoryOpen.value = false
-  syncBoardTransformFromLayer()
-  saveWork(false)
-  const src = await exportEditorImage({
-    canvasId: 'exportCanvas',
-    cw,
-    ch,
-    win,
-    curBoard: curBoard.value,
-    curBag: curBag.value,
-    boardLayer: hasBoardLayer.value ? { ...boardLayer } : undefined,
-    layers: cloneLayers(),
-  })
-  if (src) {
-    resultSrc.value = src
-    await addExportHistory(src)
-    resultPreviewOpen.value = true
+  let failed = false
+  Taro.showLoading({ title: '导出中' })
+  try {
+    syncBoardTransformFromLayer()
+    saveWork(false)
+    const src = await exportEditorImage({
+      canvasId: 'exportCanvas',
+      cw,
+      ch,
+      win,
+      curBoard: curBoard.value,
+      curBag: curBag.value,
+      boardLayer: hasBoardLayer.value ? { ...boardLayer } : undefined,
+      layers: cloneLayers(),
+    })
+    if (src) {
+      resultSrc.value = src
+      await addExportHistory(src)
+      resultPreviewOpen.value = true
+    } else {
+      failed = true
+    }
+  } finally {
+    Taro.hideLoading()
   }
+  if (failed) Taro.showToast({ title: '导出失败，请重试', icon: 'none' })
 }
 function closeExportPreview() {
   resultPreviewOpen.value = false
