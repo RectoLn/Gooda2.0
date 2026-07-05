@@ -4,8 +4,8 @@ export default defineAppConfig({
   ],
   window: {
     backgroundTextStyle: 'light',
-    navigationBarBackgroundColor: '#674CFF',
-    navigationBarTitleText: '千岛小程序',
-    navigationBarTextStyle: 'white'
+    navigationBarBackgroundColor: '#fff',
+    navigationBarTitleText: '谷搭',
+    navigationBarTextStyle: 'black'
   }
 })

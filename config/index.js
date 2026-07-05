@@ -6,8 +6,8 @@ import prodConfig from './prod'
 // https://taro-docs.jd.com/docs/next/config#defineconfig-辅助函数
 export default defineConfig(async (merge, { command, mode }) => {
   const baseConfig = {
-    projectName: 'capability-support',
-    date: '2026-5-23',
+    projectName: 'gooda-editor',
+    date: '2026-7-2',
     designWidth: 750,
     deviceRatio: {
       640: 2.34 / 2,
@@ -31,6 +31,9 @@ export default defineConfig(async (merge, { command, mode }) => {
     framework: 'vue3',
     compiler: 'vite',
     mini: {
+      // 图片默认 base64 内联（Taro mini 默认行为）。原因：weapp/Dimina 里
+      // <image src="assets/x.png"> 的相对路径是相对页面目录解析的，独立文件会 404；
+      // data URI 不受路径影响，一定能渲染。图片已做下采样，内联体积可控。
       postcss: {
         pxtransform: {
           enable: true,
@@ -46,8 +49,17 @@ export default defineConfig(async (merge, { command, mode }) => {
       },
     },
     h5: {
-      publicPath: '/',
+      publicPath: './',
       staticDirectory: 'static',
+      devServer: {
+        host: '0.0.0.0',
+        port: 10086,
+        allowedHosts: 'all'
+      },
+      output: {
+        filename: 'js/[name].[hash:8].js',
+        chunkFilename: 'js/[name].[chunkhash:8].js'
+      },
       miniCssExtractPluginOption: {
         ignoreOrder: true,
         filename: 'css/[name].[hash].css',
