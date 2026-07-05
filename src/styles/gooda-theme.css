@@ -635,12 +635,28 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
    transition: opacity .12s ease;
 }
 
+.layer-handle::before {
+   content: "";
+   position: absolute;
+   left: 50%;
+   top: 50%;
+   width: 18PX;
+   height: 18PX;
+   border-radius: 999PX;
+   transform: translate(-50%, -50%);
+   background: rgba(255,255,255,.92);
+   box-shadow: 0 2PX 7PX rgba(15,23,42,.14), inset 0 0 0 1PX rgba(31,101,183,.10);
+   pointer-events: none;
+}
+
 .handle-icon {
    width: 11PX;
    height: 11PX;
+   position: relative;
+   z-index: 1;
    display: block;
    opacity: .9;
-   filter: brightness(0) saturate(100%) invert(19%) sepia(5%) saturate(486%) hue-rotate(182deg) brightness(92%) contrast(88%) drop-shadow(0 1PX 2PX rgba(255,255,255,.85));
+   filter: brightness(0) saturate(100%) invert(19%) sepia(5%) saturate(486%) hue-rotate(182deg) brightness(92%) contrast(88%);
    pointer-events: none;
 }
 
