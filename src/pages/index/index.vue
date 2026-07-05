@@ -241,7 +241,7 @@
       @import-item="importSpuFromLibrary"
     />
 
-    <canvas type="2d" id="exportCanvas" class="export-canvas" />
+    <canvas type="2d" id="exportCanvas" canvas-id="exportCanvas" class="export-canvas" />
     <ExportHistoryPanel
       :open="exportHistoryOpen"
       :records="exportHistory"

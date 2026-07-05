@@ -125,12 +125,20 @@ export function exportEditorImage(options: ExportEditorImageOptions): Promise<st
         } catch (_) {}
       }
       Taro.canvasToTempFilePath({
+        canvasId,
         canvas: node,
+        x: 0,
+        y: 0,
+        width: EXPORT_SIZE,
+        height: EXPORT_SIZE,
+        destWidth: EXPORT_SIZE,
+        destHeight: EXPORT_SIZE,
         success: (r) => {
           Taro.showToast({ title: '已导出', icon: 'none' })
           resolve(r.tempFilePath)
         },
-        fail: () => {
+        fail: (err) => {
+          console.warn('[gooda-export] canvasToTempFilePath failed', err)
           try {
             resolve((node as any).toDataURL('image/png'))
           } catch (_) {

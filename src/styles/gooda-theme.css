@@ -1709,8 +1709,8 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
    position: fixed;
    left: 0;
    top: 0;
-   width: 1PX;
-   height: 1PX;
+   width: 1280PX;
+   height: 1280PX;
    opacity: 0;
    pointer-events: none;
    z-index: -1;
