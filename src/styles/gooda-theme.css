@@ -617,21 +617,20 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
 .layer-handle {
    position: absolute;
    z-index: 40;
-   width: 20PX;
-   height: 20PX;
+   width: 28PX;
+   height: 28PX;
    border-radius: 999PX;
-   background: rgba(255,255,255,.62);
-   border: 1PX solid rgba(255,255,255,.74);
-   box-shadow: 0 5PX 13PX rgba(15,23,42,.11), inset 0 1PX 0 rgba(255,255,255,.52);
+   background: transparent;
+   border: 0;
+   box-shadow: none;
    color: #34363a;
    display: flex;
    align-items: center;
    justify-content: center;
    transform: translate(-50%, -50%) rotate(var(--handle-rotation)) scale(var(--handle-scale));
    touch-action: none;
-   backdrop-filter: blur(18PX) saturate(1.42);
    pointer-events: auto;
-   overflow: hidden;
+   overflow: visible;
    opacity: 1;
    transition: opacity .12s ease;
 }
@@ -640,8 +639,8 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
    width: 11PX;
    height: 11PX;
    display: block;
-   opacity: .78;
-   filter: brightness(0) saturate(100%) invert(19%) sepia(5%) saturate(486%) hue-rotate(182deg) brightness(92%) contrast(88%);
+   opacity: .9;
+   filter: brightness(0) saturate(100%) invert(19%) sepia(5%) saturate(486%) hue-rotate(182deg) brightness(92%) contrast(88%) drop-shadow(0 1PX 2PX rgba(255,255,255,.85));
    pointer-events: none;
 }
 
