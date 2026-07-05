@@ -2787,6 +2787,23 @@ function saveError(detail: string) {
   console.warn('[gooda-export] save failed', detail)
   Taro.showModal({ title: '保存失败', content: detail, showCancel: false, confirmText: '知道了' })
 }
+// Dimina 回调以 [result] 数组形态回传，取首元素拿真实 errMsg。
+function errMsgOf(err: any): string {
+  const e = Array.isArray(err) ? err[0] : err
+  return (e && (e.errMsg || e.message)) || ''
+}
+// iOS 宿主的 saveImageToPhotosAlbum 用 UIImage(contentsOfFile:) 直接打开 filePath，
+// 不解析 difile:// → 直存失败。previewImage 会把 difile 解析成真实沙盒路径并弹出
+// 原生大图（showMenu），用户长按走系统「存储图片」，由系统处理相册权限。这是纯
+// Dimina 下 iOS 可靠的保存路径；Android 直存已可用，仅在直存失败时才走这里兜底。
+function previewSaveFallback(path: string) {
+  Taro.previewImage({
+    current: path,
+    urls: [path],
+    success: () => Taro.showToast({ title: '长按图片选择「存储图片」', icon: 'none' }),
+    fail: (err: any) => saveError(errMsgOf(err) || '无法打开图片预览'),
+  })
+}
 
 async function saveExportImage() {
   if (!resultSrc.value) return
@@ -2811,14 +2828,14 @@ async function saveExportImage() {
     saveError('无法写入临时文件（getFileSystemManager.writeFile 不可用或失败）')
     return
   }
+  const path = filePath
   Taro.saveImageToPhotosAlbum({
-    filePath,
+    filePath: path,
     success: () => Taro.showToast({ title: '已保存到相册', icon: 'none' }),
-    // Dimina 回调以 [result] 数组形态回传，取首元素拿真实 errMsg。
+    // 直存失败（iOS 不解析 difile / 宿主相册权限）→ 兜底到长按存图，不再直接报错。
     fail: (err: any) => {
-      const e = Array.isArray(err) ? err[0] : err
-      const msg = (e && (e.errMsg || e.message)) || '请检查相册权限'
-      saveError(String(msg))
+      console.warn('[gooda-export] saveImageToPhotosAlbum failed', errMsgOf(err))
+      previewSaveFallback(path)
     },
   })
 }
