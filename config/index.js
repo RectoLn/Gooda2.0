@@ -21,6 +21,8 @@ export default defineConfig(async (merge, { command, mode }) => {
       "@tarojs/plugin-generator"
     ],
     defineConstants: {
+      'process.env.TARO_APP_SPU_PROXY_BASE': JSON.stringify(process.env.TARO_APP_SPU_PROXY_BASE || ''),
+      'process.env.TARO_APP_SPU_MOCK': JSON.stringify(process.env.TARO_APP_SPU_MOCK || '')
     },
     copy: {
       patterns: [
