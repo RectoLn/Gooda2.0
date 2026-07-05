@@ -1,7 +1,7 @@
 <template>
   <view
     class="page"
-    :class="{ 'has-selection': selected, 'pure-view': materialCollapsed, 'stage-zoomed': stageZoomed }"
+    :class="{ 'has-selection': selected, 'pure-view': isCollapsed, 'shelf-tall': isTall, 'stage-zoomed': stageZoomed }"
     :style="{ height: pageH + 'px', minHeight: pageH + 'px', backgroundImage: `url(${appWaterBg})` }"
   >
     <EditorTopbar
@@ -12,6 +12,9 @@
       @history="openExportHistory"
       @export="exportImage"
     />
+
+    <!-- 满态遮罩：抽屉外变暗；点按回退到 open。位于痛包/工具栏之上、素材面板之下。 -->
+    <view class="shelf-backdrop" :class="{ show: isTall }" @tap="collapseShelf" />
 
     <view
       class="stage-wrap"
@@ -26,7 +29,7 @@
         :show-grid="showGrid"
         :layer-drawer-open="showLayerDrawer"
         :dragging="layerButtonMoving"
-        :collapsed="materialCollapsed"
+        :collapsed="isCollapsed"
         :rail-style="layerButtonStyle"
         @toggle-zoom="runRailAction(toggleStageZoom)"
         @toggle-grid="runRailAction(toggleGrid)"
@@ -134,7 +137,7 @@
 
     </view>
 
-    <view class="bottom-dock" :class="{ collapsed: materialCollapsed, dragging: sheetDragging }">
+    <view class="bottom-dock" :class="{ collapsed: isCollapsed, tall: isTall, dragging: sheetDragging }">
       <NudgeInspector
         :selected="selected"
         :scale-field-value="scaleFieldValue"
@@ -319,7 +322,9 @@ import type { QiandaoSpuSummary } from '../../services/qiandao/types'
 import appWaterBg from '../../assets/app-water-bg.jpg'
 
 const LAYER_LONG_PRESS_MS = 1600
-const MATERIAL_COLLAPSED_PEEK = 86
+// 素材抽屉三态露出高度（px）：合(peek) / 开 / 满。满态高度按屏高比例算。
+const SHEET_PEEK_H = 86
+const SHEET_OPEN_H = 300
 const LAYER_RAIL_TOP_GUARD = 98
 const EXPORT_HISTORY_KEY = `${STORAGE_KEY}-export-history`
 const EXPORT_HISTORY_LIMIT = 8
@@ -361,6 +366,9 @@ const nativeChromeReserve = process.env.TARO_ENV === 'h5' ? 0 : 84
 const pageH = Math.max(sys.screenHeight || 0, (sys.windowHeight || vp.h || 760) + nativeChromeReserve)
 const cw = Math.min(vp.w - 8, Math.floor((vp.h - 300) * 0.84), 430)
 const ch = Math.round(cw * BAG_RATIO)
+// 满态抽屉高度：屏高的 ~64%，并夹在 [420, 屏高-150] 之间，确保比 open(300) 高、
+// 又给上方缩小后的痛包留出空间。面板始终以该高度绝对定位，靠 translateY 控制露出。
+const SHEET_TALL_H = Math.round(Math.min(Math.max((vp.h || 760) * 0.64, 420), (vp.h || 760) - 150))
 const win = reactive({
   x: WIN.l * cw, y: WIN.t * ch,
   w: (WIN.r - WIN.l) * cw, h: (WIN.b - WIN.t) * ch,
@@ -379,7 +387,7 @@ const subCats = computed(() => SUBCATS[category.value] || ['全部'])
 function setCategory(c: CatName) {
   category.value = c
   subCat.value = '全部'
-  if (materialCollapsed.value) materialCollapsed.value = false
+  if (shelfState.value === 'collapsed') shelfState.value = 'open'
 }
 const doc = reactive<{ layers: Layer[] }>({ layers: [] })
 const selectedId = ref('')
@@ -528,7 +536,11 @@ const redoStack = ref<Snapshot[]>([])
 const showLayerDrawer = ref(false)
 const layerButtonMoving = ref(false)
 const layerDragging = ref(false)
-const materialCollapsed = ref(false)
+// 素材抽屉三态：合 / 开 / 满。isCollapsed 保留给沿用旧 collapsed 语义的地方。
+type ShelfState = 'collapsed' | 'open' | 'tall'
+const shelfState = ref<ShelfState>('open')
+const isCollapsed = computed(() => shelfState.value === 'collapsed')
+const isTall = computed(() => shelfState.value === 'tall')
 const sheetDragging = ref(false)
 const sheetDragY = ref(0)
 const drawerDragging = ref(false)
@@ -590,15 +602,23 @@ const visibleLayerList = computed(() => {
   return list
 })
 const layerButtonStyle = computed(() => ({
-  transform: `translate3d(${materialCollapsed.value ? layerButtonHiddenX() : layerButton.x}px, ${layerButton.y}px, 0)`,
+  transform: `translate3d(${isCollapsed.value ? layerButtonHiddenX() : layerButton.x}px, ${layerButton.y}px, 0)`,
 }))
-const materialPanelStyle = computed(() => {
-  if (!sheetDragging.value) return {}
-  if (materialCollapsed.value) {
-    return { transform: `translateY(calc(100% - ${MATERIAL_COLLAPSED_PEEK}PX + ${sheetDragY.value}px))` }
-  }
-  return { transform: `translateY(${sheetDragY.value}px)` }
+// 面板始终以 SHEET_TALL_H 绝对定位在底部，靠 translateY 控制露出高度。
+// 三态基准位移 = 面板高 - 该态露出高；拖拽时叠加 sheetDragY 并夹在 [满,合] 之间。
+function shelfBaseOffset(state: ShelfState) {
+  const reveal = state === 'collapsed' ? SHEET_PEEK_H : state === 'open' ? SHEET_OPEN_H : SHEET_TALL_H
+  return SHEET_TALL_H - reveal
+}
+const shelfOffset = computed(() => {
+  const base = shelfBaseOffset(shelfState.value)
+  const raw = sheetDragging.value ? base + sheetDragY.value : base
+  return clamp(raw, 0, SHEET_TALL_H - SHEET_PEEK_H)
 })
+const materialPanelStyle = computed(() => ({
+  height: `${SHEET_TALL_H}px`,
+  transform: `translateY(${shelfOffset.value}px)`,
+}))
 const drawerStyle = computed(() => {
   if (!drawerDragging.value) return {}
   return { transform: `translateY(${drawerDragY.value}px)` }
@@ -1264,12 +1284,19 @@ function redo() {
 
 function markLayer() { lastLayerTs = Date.now() }
 function onLayerTap(ly: Layer) { selectedId.value = ly.id; markLayer() }
-function collapseMaterialDrawer() {
-  if (!materialCollapsed.value) materialCollapsed.value = true
+// 逐级收起：满 → 开 → 合。逐级展开：合 → 开 → 满。
+const SHELF_STEPS: ShelfState[] = ['collapsed', 'open', 'tall']
+function stepShelf(dir: 1 | -1) {
+  const i = SHELF_STEPS.indexOf(shelfState.value)
+  const next = SHELF_STEPS[clamp(i + dir, 0, SHELF_STEPS.length - 1)]
+  if (next !== shelfState.value) shelfState.value = next
+}
+function expandShelf() {
+  stepShelf(1)
   showLayerDrawer.value = false
 }
-function expandMaterialDrawer() {
-  if (materialCollapsed.value) materialCollapsed.value = false
+function collapseShelf() {
+  stepShelf(-1)
   showLayerDrawer.value = false
 }
 // Tapping the canvas / outside area only deselects — it no longer toggles the drawer.
@@ -1296,8 +1323,8 @@ function endStageSwipe(x: number, y: number) {
   const dx = x - stageSwipe.sx
   // vertical swipe → drawer; more vertical than horizontal to avoid accidental toggles
   if (Math.abs(dy) > STAGE_SWIPE_THRESHOLD && Math.abs(dy) > Math.abs(dx)) {
-    if (dy > 0) collapseMaterialDrawer() // swipe down → close
-    else expandMaterialDrawer()          // swipe up → open
+    if (dy > 0) collapseShelf() // swipe down → 逐级收起（满→开→合）
+    else expandShelf()          // swipe up → 逐级展开（合→开→满）
     return
   }
   if (!stageSwipe.moved) deselectOnBackgroundTap() // plain tap → deselect only
@@ -1427,8 +1454,9 @@ function toggleMaterialCollapsed() {
     sheetSuppressTap = false
     return
   }
-  materialCollapsed.value = !materialCollapsed.value
-  if (materialCollapsed.value) showLayerDrawer.value = false
+  // 点把手：合→开、满→开、开→合（点按不进入满态，满态靠上滑/拖拽触发）。
+  shelfState.value = shelfState.value === 'collapsed' ? 'open' : shelfState.value === 'tall' ? 'open' : 'collapsed'
+  if (shelfState.value === 'collapsed') showLayerDrawer.value = false
 }
 function suppressNextSheetTap() {
   sheetSuppressTap = true
@@ -1442,18 +1470,22 @@ function startSheetDrag(y: number) {
 function moveSheetDrag(y: number) {
   const dy = y - sg.sy
   if (Math.abs(dy) > 8) sg.moved = true
-  if (materialCollapsed.value) sheetDragY.value = clamp(dy, -170, 18)
-  else sheetDragY.value = clamp(dy, -16, 190)
+  // 连续跟手：偏移在 shelfOffset 里叠加并夹紧（满↔合全程），松手吸附到最近一态。
+  sheetDragY.value = dy
 }
 function endSheetDrag(y?: number) {
   const dy = typeof y === 'number' ? y - sg.sy : 0
   if (sg.moved) {
     suppressNextSheetTap()
-    if (dy > 18) {
-      materialCollapsed.value = true
-      showLayerDrawer.value = false
+    const finalOffset = clamp(shelfBaseOffset(shelfState.value) + dy, 0, SHEET_TALL_H - SHEET_PEEK_H)
+    let best: ShelfState = 'open'
+    let bestD = Infinity
+    for (const s of SHELF_STEPS) {
+      const d = Math.abs(shelfBaseOffset(s) - finalOffset)
+      if (d < bestD) { bestD = d; best = s }
     }
-    else if (dy < -18) materialCollapsed.value = false
+    shelfState.value = best
+    if (best === 'collapsed') showLayerDrawer.value = false
   }
   sheetDragging.value = false
   sheetDragY.value = 0

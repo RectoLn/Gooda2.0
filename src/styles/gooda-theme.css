@@ -709,7 +709,8 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
 .bottom-dock {
    position: relative;
    z-index: 1000;
-   flex: 0 0 auto;
+   /* 面板改为始终绝对定位（靠 translateY 控制露出），dock 仅预留 open 高度做上方布局。 */
+   flex: 0 0 300PX;
    padding: 0 0 0;
    transition: flex-basis .24s ease;
 }
@@ -758,7 +759,12 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
 }
 
 .material-panel {
-   height: 300PX;
+   /* 始终绝对贴底；高度(SHEET_TALL_H)与露出位移(translateY)由 JS 内联注入，
+      三态与拖拽统一走 transform，动画顺滑。 */
+   position: absolute;
+   left: 0;
+   right: 0;
+   bottom: 0;
    min-height: 0;
    border-radius: 26PX 26PX 18PX 18PX;
    display: flex;
@@ -779,12 +785,8 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
    bottom: 94PX;
 }
 
+/* 露出位移由 JS 内联 transform 驱动，这里只保留"收起态 peek 不可点"语义。 */
 .bottom-dock.collapsed .material-panel {
-   position: absolute;
-   left: 0;
-   right: 0;
-   bottom: 0;
-   transform: translateY(calc(100% - 86PX));
    opacity: 1;
    pointer-events: none;
 }
@@ -803,6 +805,37 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
 .bottom-dock.collapsed .cats {
    opacity: 1;
    pointer-events: auto;
+}
+
+/* ---- 满态(tall)：痛包缩到上方，抽屉外变暗，微调栏与工具栏隐藏 ---- */
+.shelf-backdrop {
+   position: fixed;
+   inset: 0;
+   z-index: 950;
+   background: rgba(15,23,42,.40);
+   opacity: 0;
+   pointer-events: none;
+   transition: opacity .3s ease;
+}
+.shelf-backdrop.show {
+   opacity: 1;
+   pointer-events: auto;
+}
+/* 痛包缩小并上移到顶部区域，给更长的素材抽屉让位 */
+.page.shelf-tall .stage {
+   transform: scale(.58) translateY(-16%);
+   transform-origin: center top;
+}
+/* 满态隐藏：比例角度微调栏 + 可拖动工具栏 */
+.page.shelf-tall .inspector {
+   opacity: 0;
+   pointer-events: none;
+}
+/* 工具栏本身已有 opacity 过渡（见上方 .stage-tool-rail 规则），这里只切换可见性。 */
+.page.shelf-tall .stage-tool-rail,
+.page.shelf-tall .floating-layers {
+   opacity: 0;
+   pointer-events: none;
 }
 
 .inspector-head, .panel-head {
