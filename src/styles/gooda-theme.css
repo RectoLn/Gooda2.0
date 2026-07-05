@@ -2566,21 +2566,7 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
    backdrop-filter: blur(16PX) saturate(1.08);
 }
 
-/* ─── 千岛资料库（SPU）搜索面板 · 素材架入口 ─── */
-
-/* 素材架里的「资料库」入口卡：与本地导入「＋」并列，同一虚线卡语言但用主题蓝强调 */
-.cell-spu {
-   flex-direction: column;
-   gap: 2PX;
-   border-style: solid;
-   border-color: rgba(31,101,183,.28);
-   background: rgba(31,101,183,.08);
-}
-.cell-spu-mark {
-   font-size: 18PX;
-   line-height: 20PX;
-   color: #1b5fae;
-}
+/* ─── 千岛资料库（SPU）搜索面板 ─── */
 
 /* 底部玻璃抽屉：低于导入编辑器(1590)，导入前面板已关闭，编辑器盖在其上也安全 */
 .spu-mask {

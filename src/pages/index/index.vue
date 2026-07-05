@@ -1112,7 +1112,6 @@ const rowItems = computed<RowItem[]>(() => {
   if (category.value === '谷子')
     return [
       { kind: 'plus', label: '导入' },
-      { kind: 'spu', label: '资料库' },
       ...placeholders('谷子'),
       ...fltAssets('谷子').map((asset) => {
         const mat = assetToMat(asset)
@@ -1580,8 +1579,7 @@ function clientPointToWindowPoint(clientX: number, clientY: number) {
 }
 function onItem(it: RowItem) {
   if (it.kind === 'mat') addLayer(it.mat)
-  else if (it.kind === 'plus') chooseImageLayer()
-  else if (it.kind === 'spu') openSpuSearch()
+  else if (it.kind === 'plus') openImportSourceMenu()
   else if (it.kind === 'none') {
     curBoard.value = -1
     if (selectedId.value === BOARD_LAYER_ID) selectedId.value = ''
@@ -2430,7 +2428,7 @@ async function confirmImportEditor() {
 // ─── 千岛资料库（SPU）导入 ───
 // 搜索/导入状态集中在页面里（组件 props in / events out）；服务请求与字段映射在
 // src/services/qiandao/。链路：搜索 → 选中 → 拉透明图/主图 → 转 data URL →
-// 透明图整图入池 / 主图走 ImportCropEditor 确认裁剪 → userAssets（source:'spu'+spuId）。
+// 资料库图片统一进入 ImportCropEditor，用户可改名、换分类，并处理假透明底/裁剪微调。
 const spuService = resolveQiandaoSpuService()
 const spuSearchOpen = ref(false)
 const spuKeyword = ref('')
@@ -2480,40 +2478,6 @@ async function runSpuSearch() {
 function spuAssetLabel(spu: QiandaoSpuSummary, sub: string) {
   return (spu.title || sub).slice(0, 12) // 与导入编辑器名称输入框 maxlength 一致
 }
-// 透明图/抠图直接整图入池（无需手动裁剪）；crop 恒等于整图（圆形吧唧取中心正方形，
-// 保证 box 纵横比 == crop 纵横比，CSS 裁剪才不变形）。
-async function createSpuAsset(src: string, spu: QiandaoSpuSummary, sub: string, shape: Shape) {
-  const fullSrc = await imageSourceToDataUrl(src)
-  const size = await measureImageSize(fullSrc)
-  const aspect = size.width > 0 && size.height > 0 ? size.width / size.height : 1
-  let crop: ImgCrop = { nx: 0, ny: 0, nw: 1, nh: 1 }
-  if (shape === 'circle' && Math.abs(aspect - 1) > 0.01) {
-    crop = aspect > 1
-      ? { nx: (1 - 1 / aspect) / 2, ny: 0, nw: 1 / aspect, nh: 1 }
-      : { nx: 0, ny: (1 - aspect) / 2, nw: 1, nh: aspect }
-  }
-  const box = importedAssetBox(shape, shape === 'circle' ? 1 : aspect)
-  const createdAt = Date.now()
-  const asset: UserAsset = {
-    id: `asset_${createdAt}_${Math.random().toString(36).slice(2, 7)}`,
-    type: '谷子',
-    sub,
-    label: spuAssetLabel(spu, sub),
-    color: 'transparent',
-    w: box.w,
-    h: box.h,
-    shape,
-    src: fullSrc,
-    crop,
-    source: 'spu',
-    spuId: spu.id,
-    createdAt,
-    updatedAt: createdAt,
-  }
-  userAssets.value = [asset, ...userAssets.value]
-  await persistUserAssets()
-  return asset
-}
 async function doImportSpu(item: QiandaoSpuSummary) {
   spuImportingId.value = item.id
   try {
@@ -2549,16 +2513,8 @@ async function doImportSpu(item: QiandaoSpuSummary) {
     }
     const sub = inferGuziSubFromSpu(spu)
     const shape = guessAssetShape('谷子', sub)
-    if (spu.transparentImage) {
-      const asset = await createSpuAsset(dataUrl, spu, sub, shape)
-      closeSpuSearch()
-      revealAssetInShelf('谷子', asset.sub)
-      Taro.showToast({ title: '已从资料库导入', icon: 'none' })
-    } else {
-      // 只有普通主图：进现有裁剪编辑器确认选区（沿用 WYSIWYG 的 data URL 不变量）
-      closeSpuSearch()
-      await openImportEditor(dataUrl, undefined, { sub, shape, label: spuAssetLabel(spu, sub), spuId: spu.id })
-    }
+    closeSpuSearch()
+    await openImportEditor(dataUrl, undefined, { sub, shape, label: spuAssetLabel(spu, sub), spuId: spu.id })
   } finally {
     spuImportingId.value = ''
   }
@@ -2587,11 +2543,27 @@ async function importSpuFromLibrary(item: QiandaoSpuSummary) {
   await doImportSpu(item)
 }
 
-function chooseImageLayer() {
+function openImportSourceMenu() {
+  const isGuzi = category.value === '谷子'
+  const itemList = isGuzi ? ['社区资料库', '拍摄', '相册'] : ['拍摄', '相册']
+  Taro.showActionSheet({
+    itemList,
+    success: (res) => {
+      const item = itemList[res.tapIndex]
+      if (item === '社区资料库') {
+        openSpuSearch()
+        return
+      }
+      void chooseImageLayer(item === '拍摄' ? ['camera'] : ['album'])
+    },
+  })
+}
+
+async function chooseImageLayer(sourceType: Array<'album' | 'camera'> = ['album', 'camera']) {
   Taro.chooseImage({
     count: 1,
     sizeType: ['compressed'],
-    sourceType: ['album', 'camera'],
+    sourceType,
     success: async (res) => {
       const src = res.tempFilePaths && res.tempFilePaths[0]
       if (!src) return

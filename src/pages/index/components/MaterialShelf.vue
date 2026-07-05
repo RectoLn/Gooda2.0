@@ -113,7 +113,6 @@
             <view v-else-if="it.color" class="cell-block" :class="it.shape" :style="{ background: it.color }">
               <text class="cell-heart">♥</text>
             </view>
-            <view v-else-if="it.kind === 'spu'" class="cell-plus cell-spu"><text class="cell-spu-mark">✦</text></view>
             <view v-else class="cell-plus"><text>＋</text></view>
           </view>
           <text class="cell-label">{{ it.label }}</text>
