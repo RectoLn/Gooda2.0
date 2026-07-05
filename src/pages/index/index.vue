@@ -225,6 +225,22 @@
       @close="closeMaterialAssetActions"
     />
 
+    <SpuSearchPanel
+      :open="spuSearchOpen"
+      :service-mode="spuService.mode"
+      :keyword="spuKeyword"
+      :loading="spuLoading"
+      :error="spuError"
+      :searched="spuSearched"
+      :items="spuItems"
+      :importing-id="spuImportingId"
+      :owned-ids="ownedSpuIds"
+      @close="closeSpuSearch"
+      @keyword-input="onSpuKeywordInput"
+      @search="runSpuSearch"
+      @import-item="importSpuFromLibrary"
+    />
+
     <canvas type="2d" id="exportCanvas" class="export-canvas" />
     <ExportHistoryPanel
       :open="exportHistoryOpen"
@@ -281,6 +297,7 @@ import AssetActionSheet from './components/AssetActionSheet.vue'
 import ExportHistoryPanel from './components/ExportHistoryPanel.vue'
 import ExportPreview from './components/ExportPreview.vue'
 import ImportCropEditor from './components/ImportCropEditor.vue'
+import SpuSearchPanel from './components/SpuSearchPanel.vue'
 import { exportEditorImage } from './editor-export'
 import {
   STORAGE_KEY, STORAGE_VERSION, EXPORT_SIZE, BAG_RATIO, BOARD_LAYER_ID, WIN, ROW_PITCH,
@@ -295,7 +312,10 @@ import {
 import { createKvStore } from '../../services/storage/kv-store'
 import { cropImageFrame, normalizeCropRect, denormalizeCropRect } from './crop-math'
 import { measureRect } from '../../platform/measure'
-import { imageSizeFromLocalFile, imageSourceToDataUrl } from '../../platform/image-io'
+import { imageSizeFromLocalFile, imageSourceToDataUrl, remoteImageToDataUrl } from '../../platform/image-io'
+import { resolveQiandaoSpuService, QiandaoSpuServiceError } from '../../services/qiandao/client'
+import { bestSpuImage, inferGuziSubFromSpu } from '../../services/qiandao/types'
+import type { QiandaoSpuSummary } from '../../services/qiandao/types'
 import appWaterBg from '../../assets/app-water-bg.jpg'
 
 const LAYER_LONG_PRESS_MS = 1600
@@ -384,6 +404,8 @@ const importDraft = reactive({
   shape: 'rect' as Shape,
   sourceW: 0,
   sourceH: 0,
+  // 非空 = 本次导入来自千岛资料库：confirm 时写入 source:'spu' + spuId
+  spuId: '',
 })
 const importDraftSubcats = computed(() => (SUBCATS[importDraft.type] || ['全部']).filter((item) => item !== '全部'))
 const importPreviewSrc = computed(() => importDraft.src || importDraft.storedSrc)
@@ -1090,6 +1112,7 @@ const rowItems = computed<RowItem[]>(() => {
   if (category.value === '谷子')
     return [
       { kind: 'plus', label: '导入' },
+      { kind: 'spu', label: '资料库' },
       ...placeholders('谷子'),
       ...fltAssets('谷子').map((asset) => {
         const mat = assetToMat(asset)
@@ -1154,6 +1177,18 @@ onMounted(async () => {
       measureImageSize, imageSizeFromDataUrl, measureImportDraftImageSize,
       openImportEditorFromAsset, confirmImportEditor, computeImportCropRect,
       userAssets, category, subCat,
+      // SPU 资料库导入链路（headless 验证用）
+      spu: {
+        mode: spuService.mode,
+        open: openSpuSearch,
+        close: closeSpuSearch,
+        search: runSpuSearch,
+        importItem: importSpuFromLibrary,
+        keyword: spuKeyword,
+        items: spuItems,
+        error: spuError,
+        loading: spuLoading,
+      },
     }
   }
 })
@@ -1546,6 +1581,7 @@ function clientPointToWindowPoint(clientX: number, clientY: number) {
 function onItem(it: RowItem) {
   if (it.kind === 'mat') addLayer(it.mat)
   else if (it.kind === 'plus') chooseImageLayer()
+  else if (it.kind === 'spu') openSpuSearch()
   else if (it.kind === 'none') {
     curBoard.value = -1
     if (selectedId.value === BOARD_LAYER_ID) selectedId.value = ''
@@ -2144,7 +2180,7 @@ function importedAssetBox(shape: Shape, aspect: number): { w: number; h: number 
   if (a >= 1) return { w: max, h: Math.max(20, Math.round(max / a)) }
   return { w: Math.max(20, Math.round(max * a)), h: max }
 }
-async function createImportedAsset(src: string, options?: { type?: UserAsset['type']; sub?: string; label?: string; shape?: Shape }) {
+async function createImportedAsset(src: string, options?: { type?: UserAsset['type']; sub?: string; label?: string; shape?: Shape; spuId?: string }) {
   const type: UserAsset['type'] = options?.type || (category.value === '装饰' ? '装饰' : '谷子')
   const sub = options?.sub || (subCat.value === '全部' ? '其他' : subCat.value)
   const shape = options?.shape || 'rect'
@@ -2167,7 +2203,8 @@ async function createImportedAsset(src: string, options?: { type?: UserAsset['ty
     shape,
     src: fullSrc,
     crop,
-    source: 'import',
+    source: options?.spuId ? 'spu' : 'import',
+    spuId: options?.spuId || undefined,
     createdAt,
     updatedAt: createdAt,
   }
@@ -2185,11 +2222,19 @@ function resetImportDraft() {
   importDraft.shape = 'rect'
   importDraft.sourceW = 0
   importDraft.sourceH = 0
+  importDraft.spuId = ''
 }
-async function openImportEditor(src: string, sourceSize?: { width: number; height: number }) {
-  const type: UserAsset['type'] = category.value === '装饰' ? '装饰' : '谷子'
+// preset：SPU 导入复用同一编辑器 —— 预填推断的分类/形状/标题，并携带 spuId 到 confirm。
+async function openImportEditor(
+  src: string,
+  sourceSize?: { width: number; height: number },
+  preset?: { sub?: string; label?: string; shape?: Shape; spuId?: string },
+) {
+  const type: UserAsset['type'] = preset?.spuId ? '谷子' : category.value === '装饰' ? '装饰' : '谷子'
   const subOptions = (SUBCATS[type] || ['全部']).filter((item) => item !== '全部')
-  const sub = subCat.value !== '全部' && subOptions.includes(subCat.value) ? subCat.value : (subOptions[0] || '其他')
+  const sub = preset?.sub && subOptions.includes(preset.sub)
+    ? preset.sub
+    : subCat.value !== '全部' && subOptions.includes(subCat.value) ? subCat.value : (subOptions[0] || '其他')
   const normalizedSize = normalizeImageSize(sourceSize?.width, sourceSize?.height)
   // CRITICAL for WYSIWYG: the editor and the final layer/cell MUST render the exact
   // same image SOURCE STRING. Previously the editor showed the temp file path while
@@ -2203,8 +2248,9 @@ async function openImportEditor(src: string, sourceSize?: { width: number; heigh
   importDraft.editAssetId = ''
   importDraft.type = type
   importDraft.sub = sub
-  importDraft.label = sub === '其他' ? '导入图片' : sub
-  importDraft.shape = 'rect'
+  importDraft.label = (preset?.label || '').trim() || (sub === '其他' ? '导入图片' : sub)
+  importDraft.shape = preset?.shape || 'rect'
+  importDraft.spuId = preset?.spuId || ''
   importDraft.sourceW = normalizedSize?.width || 0
   importDraft.sourceH = normalizedSize?.height || 0
   // Leave imageW/H at 0 so the widthFix probe renders and measures through the real
@@ -2236,6 +2282,7 @@ async function openImportEditorFromAsset(asset: UserAsset) {
   importDraft.sub = asset.sub
   importDraft.label = asset.label
   importDraft.shape = asset.shape
+  importDraft.spuId = '' // 编辑分支保留原 asset 的 source/spuId，这里只需清掉残留
   // Do NOT seed dims from asset.w/h — those are the (clamped) layer box size, not the
   // image's true pixel aspect. Leaving them 0 makes refreshImportCropStage measure the
   // real aspect from asset.src (a data URL → byte parser), so the edit preview shows
@@ -2369,14 +2416,175 @@ async function confirmImportEditor() {
       sub: importDraft.sub,
       label: importDraft.label,
       shape: importDraft.shape,
+      spuId: importDraft.spuId || undefined,
     })
     importEditorOpen.value = false
     resetImportDraft()
     revealAssetInShelf(asset.type, asset.sub)
-    Taro.showToast({ title: '已导入', icon: 'none' })
+    Taro.showToast({ title: asset.source === 'spu' ? '已从资料库导入' : '已导入', icon: 'none' })
   } finally {
     importSaving.value = false
   }
+}
+
+// ─── 千岛资料库（SPU）导入 ───
+// 搜索/导入状态集中在页面里（组件 props in / events out）；服务请求与字段映射在
+// src/services/qiandao/。链路：搜索 → 选中 → 拉透明图/主图 → 转 data URL →
+// 透明图整图入池 / 主图走 ImportCropEditor 确认裁剪 → userAssets（source:'spu'+spuId）。
+const spuService = resolveQiandaoSpuService()
+const spuSearchOpen = ref(false)
+const spuKeyword = ref('')
+const spuLoading = ref(false)
+const spuError = ref('')
+const spuSearched = ref(false)
+const spuItems = ref<QiandaoSpuSummary[]>([])
+const spuImportingId = ref('')
+const ownedSpuIds = computed(() => userAssets.value.map((asset) => asset.spuId).filter((id): id is string => !!id))
+let spuSearchSeq = 0
+
+function openSpuSearch() {
+  spuSearchOpen.value = true
+  // 未配置后端代理时开门见山：面板直接进入可理解的失败态，而不是搜索后才报错
+  if (spuService.mode === 'unconfigured' && !spuSearched.value && !spuError.value) {
+    spuError.value = 'SPU 资料库服务未配置：需要 Gooda 后端代理转发官方 OpenAPI（/spu/v1/search、/spu/v1/detail）'
+  }
+}
+function closeSpuSearch() {
+  spuSearchOpen.value = false
+}
+function onSpuKeywordInput(event: any) {
+  spuKeyword.value = inputValue(event)
+}
+async function runSpuSearch() {
+  const keyword = spuKeyword.value.trim()
+  if (!keyword) {
+    Taro.showToast({ title: '输入 IP / 角色 / 谷子名', icon: 'none' })
+    return
+  }
+  const seq = ++spuSearchSeq
+  spuLoading.value = true
+  spuError.value = ''
+  spuSearched.value = true
+  try {
+    const result = await spuService.client.searchSpu({ keyword, page: 1, pageSize: 24 })
+    if (seq !== spuSearchSeq) return
+    spuItems.value = result.items
+  } catch (err: any) {
+    if (seq !== spuSearchSeq) return
+    spuItems.value = []
+    spuError.value = err instanceof QiandaoSpuServiceError ? err.message : '搜索失败，请检查网络后重试'
+  } finally {
+    if (seq === spuSearchSeq) spuLoading.value = false
+  }
+}
+function spuAssetLabel(spu: QiandaoSpuSummary, sub: string) {
+  return (spu.title || sub).slice(0, 12) // 与导入编辑器名称输入框 maxlength 一致
+}
+// 透明图/抠图直接整图入池（无需手动裁剪）；crop 恒等于整图（圆形吧唧取中心正方形，
+// 保证 box 纵横比 == crop 纵横比，CSS 裁剪才不变形）。
+async function createSpuAsset(src: string, spu: QiandaoSpuSummary, sub: string, shape: Shape) {
+  const fullSrc = await imageSourceToDataUrl(src)
+  const size = await measureImageSize(fullSrc)
+  const aspect = size.width > 0 && size.height > 0 ? size.width / size.height : 1
+  let crop: ImgCrop = { nx: 0, ny: 0, nw: 1, nh: 1 }
+  if (shape === 'circle' && Math.abs(aspect - 1) > 0.01) {
+    crop = aspect > 1
+      ? { nx: (1 - 1 / aspect) / 2, ny: 0, nw: 1 / aspect, nh: 1 }
+      : { nx: 0, ny: (1 - aspect) / 2, nw: 1, nh: aspect }
+  }
+  const box = importedAssetBox(shape, shape === 'circle' ? 1 : aspect)
+  const createdAt = Date.now()
+  const asset: UserAsset = {
+    id: `asset_${createdAt}_${Math.random().toString(36).slice(2, 7)}`,
+    type: '谷子',
+    sub,
+    label: spuAssetLabel(spu, sub),
+    color: '#fff',
+    w: box.w,
+    h: box.h,
+    shape,
+    src: fullSrc,
+    crop,
+    source: 'spu',
+    spuId: spu.id,
+    createdAt,
+    updatedAt: createdAt,
+  }
+  userAssets.value = [asset, ...userAssets.value]
+  await persistUserAssets()
+  return asset
+}
+async function doImportSpu(item: QiandaoSpuSummary) {
+  spuImportingId.value = item.id
+  try {
+    let spu = item
+    if (!spu.transparentImage) {
+      // 详情接口常带 whiteBgPng 透明图，拿到就能免手动裁剪；失败不阻断，退回列表图
+      try {
+        const detail = await spuService.client.getSpuDetail(item.id)
+        if (detail) {
+          spu = {
+            ...item,
+            title: detail.title || item.title,
+            image: detail.image || item.image,
+            transparentImage: detail.transparentImage || item.transparentImage,
+            typeId: detail.typeId || item.typeId,
+            typeName: detail.typeName || item.typeName,
+            sourceUrl: detail.sourceUrl || item.sourceUrl,
+            priceText: detail.priceText || item.priceText,
+          }
+        }
+      } catch (_) {}
+    }
+    const remote = bestSpuImage(spu)
+    if (!remote) {
+      Taro.showToast({ title: '该谷子暂无可用图片', icon: 'none' })
+      return
+    }
+    const dataUrl = await remoteImageToDataUrl(remote)
+    if (!dataUrl.startsWith('data:')) {
+      // 防盗链/CORS 拦截时宁可明确失败，也不把易失效的远程 URL 存进谷子池
+      Taro.showToast({ title: '图片下载失败，请稍后重试', icon: 'none' })
+      return
+    }
+    const sub = inferGuziSubFromSpu(spu)
+    const shape = guessAssetShape('谷子', sub)
+    if (spu.transparentImage) {
+      const asset = await createSpuAsset(dataUrl, spu, sub, shape)
+      closeSpuSearch()
+      revealAssetInShelf('谷子', asset.sub)
+      Taro.showToast({ title: '已从资料库导入', icon: 'none' })
+    } else {
+      // 只有普通主图：进现有裁剪编辑器确认选区（沿用 WYSIWYG 的 data URL 不变量）
+      closeSpuSearch()
+      await openImportEditor(dataUrl, undefined, { sub, shape, label: spuAssetLabel(spu, sub), spuId: spu.id })
+    }
+  } finally {
+    spuImportingId.value = ''
+  }
+}
+async function importSpuFromLibrary(item: QiandaoSpuSummary) {
+  if (spuImportingId.value) return
+  const existing = userAssets.value.find((asset) => asset.spuId === item.id)
+  if (existing) {
+    // 不静默重复：明确问一句；「去查看」直接切到素材架对应分类
+    Taro.showModal({
+      title: '已在谷子池',
+      content: `「${existing.label}」已从资料库导入过，还要再导一份吗？`,
+      confirmText: '再导一份',
+      cancelText: '去查看',
+      success: (res) => {
+        if (res.confirm) {
+          void doImportSpu(item)
+        } else {
+          closeSpuSearch()
+          revealAssetInShelf('谷子', existing.sub)
+        }
+      },
+    })
+    return
+  }
+  await doImportSpu(item)
 }
 
 function chooseImageLayer() {

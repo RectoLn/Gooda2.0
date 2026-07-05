@@ -74,6 +74,9 @@ export async function imageSourceToDataUrl(src: string) {
     if (typeof document === 'undefined') return await imageSourceToDataUrlNative(src)
     return await new Promise<string>((resolve) => {
       const img = new Image()
+      // remote images need CORS approval to leave the canvas un-tainted; for
+      // same-origin/data sources the attribute is a no-op.
+      img.crossOrigin = 'anonymous'
       img.onload = () => {
         try {
           const canvas = document.createElement('canvas')
@@ -91,4 +94,27 @@ export async function imageSourceToDataUrl(src: string) {
       img.src = src
     })
   }
+}
+
+// Fetch a REMOTE (http/https) image into a data URL. On native runtimes fetch /
+// FileReader are unavailable and the filesystem reader cannot open URLs, so download
+// to a temp file first (downloadFile is in Dimina's adapted API list). Returns the
+// original URL unchanged when everything fails — the caller decides if that's fatal
+// (e.g. anti-hotlink CDNs / missing CORS headers on H5).
+export async function remoteImageToDataUrl(url: string): Promise<string> {
+  if (!/^https?:\/\//i.test(url)) return imageSourceToDataUrl(url)
+  if (typeof fetch !== 'undefined' && typeof FileReader !== 'undefined') return imageSourceToDataUrl(url)
+  const temp = await new Promise<string>((resolve) => {
+    try {
+      Taro.downloadFile({
+        url,
+        success: (res: any) => resolve((res?.statusCode === 200 && res.tempFilePath) || ''),
+        fail: () => resolve(''),
+      })
+    } catch (_) {
+      resolve('')
+    }
+  })
+  if (!temp) return url
+  return imageSourceToDataUrlNative(temp)
 }

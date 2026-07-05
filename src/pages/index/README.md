@@ -61,6 +61,14 @@ This page is the MVP mobile layer editor for 痛包 / 谷子 layout work. The cu
   - Presentational modal/sheet overlays lifted out of the page template. Props in, events out;
     all state and mutations stay in `index.vue`. Their CSS still lives in `gooda-theme.css`.
 
+- `components/SpuSearchPanel.vue`
+  - 千岛资料库（SPU）搜索/导入面板，素材架谷子分类的「资料库」入口打开。
+  - Presentational only：搜索关键词、加载/失败/空态、结果与导入状态全部由 `index.vue`
+    持有并通过 props 传入；服务请求与字段映射在 `../../services/qiandao/`。
+  - 导入链路：透明图（whiteBgPng）→ 整图直接入池；普通主图 → 复用 ImportCropEditor
+    确认裁剪（同一 data URL 不变量），confirm 时带 `importDraft.spuId` 写入
+    `source: 'spu' + spuId`。
+
 - `../../styles/gooda-theme.css`
   - Shared water-blue / iOS glass visual language for this editor.
   - Prefer adding reusable tokens here before introducing new one-off blues or glass styles.

@@ -40,6 +40,7 @@ export type RowItem =
   | { kind: 'bag'; label: string; img: string; idx: number }
   | { kind: 'none'; label: string }
   | { kind: 'plus'; label: string }
+  | { kind: 'spu'; label: string }
 // One exported image kept in history. Shared by the page and ExportHistoryPanel.
 export type ExportHistoryRecord = { id: string; src: string; createdAt: number; name: string; timeText: string }
 

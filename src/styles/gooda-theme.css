@@ -2556,3 +2556,229 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
    box-shadow: 0 4PX 10PX rgba(31,101,183,.045), inset 0 1PX 0 rgba(255,255,255,.42);
    backdrop-filter: blur(16PX) saturate(1.08);
 }
+
+/* ─── 千岛资料库（SPU）搜索面板 · 素材架入口 ─── */
+
+/* 素材架里的「资料库」入口卡：与本地导入「＋」并列，同一虚线卡语言但用主题蓝强调 */
+.cell-spu {
+   flex-direction: column;
+   gap: 2PX;
+   border-style: solid;
+   border-color: rgba(31,101,183,.28);
+   background: rgba(31,101,183,.08);
+}
+.cell-spu-mark {
+   font-size: 18PX;
+   line-height: 20PX;
+   color: #1b5fae;
+}
+
+/* 底部玻璃抽屉：低于导入编辑器(1590)，导入前面板已关闭，编辑器盖在其上也安全 */
+.spu-mask {
+   position: fixed;
+   inset: 0;
+   z-index: 1568;
+   background: rgba(23,52,84,.32);
+   display: flex;
+   flex-direction: column;
+   justify-content: flex-end;
+}
+.spu-panel {
+   max-height: 78%;
+   min-height: 46%;
+   display: flex;
+   flex-direction: column;
+   gap: 10PX;
+   padding: 14PX 16PX max(16PX, env(safe-area-inset-bottom));
+   border-radius: 22PX 22PX 0 0;
+   box-sizing: border-box;
+   background:
+      linear-gradient(180deg, rgba(255,255,255,.72), rgba(233,244,255,.5) 60%, rgba(214,233,250,.55)),
+      rgba(255,255,255,.85);
+   box-shadow: 0 -10PX 30PX rgba(31,101,183,.16), inset 0 1PX 0 rgba(255,255,255,.6);
+   backdrop-filter: blur(18PX) saturate(1.08);
+}
+.spu-head {
+   display: flex;
+   align-items: center;
+   justify-content: space-between;
+}
+.spu-title {
+   font-family: var(--font-serif);
+   font-size: 17PX;
+   font-weight: 640;
+   color: #17324f;
+}
+.spu-close {
+   width: 30PX;
+   height: 30PX;
+   border-radius: 10PX;
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   background: rgba(255,255,255,.4);
+   box-shadow: inset 0 0 0 1PX rgba(95,149,199,.14);
+   color: rgba(60,60,67,.6);
+   font-size: 18PX;
+}
+.spu-mode-tip {
+   font-size: 11PX;
+   line-height: 16PX;
+   color: #8a6d1f;
+   background: rgba(240,199,94,.18);
+   border-radius: 8PX;
+   padding: 5PX 9PX;
+}
+.spu-search-row {
+   display: flex;
+   gap: 8PX;
+}
+.spu-input {
+   flex: 1 1 auto;
+   height: 36PX;
+   border-radius: 11PX;
+   padding: 0 12PX;
+   font-size: 14PX;
+   color: #1d1d1f;
+   background: rgba(255,255,255,.6);
+   box-shadow: inset 0 0 0 1PX rgba(95,149,199,.16), inset 0 1PX 0 rgba(255,255,255,.5);
+   box-sizing: border-box;
+}
+.spu-search-btn {
+   flex: 0 0 auto;
+   min-width: 60PX;
+   height: 36PX;
+   border-radius: 11PX;
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   font-size: 14PX;
+   font-weight: 620;
+   background: rgba(31,101,183,.12);
+   color: #1b5fae;
+   box-shadow: inset 0 0 0 1PX rgba(31,101,183,.20), inset 0 1PX 0 rgba(255,255,255,.44);
+}
+.spu-body {
+   flex: 1 1 auto;
+   min-height: 160PX;
+   overflow-y: auto;
+   -webkit-overflow-scrolling: touch;
+}
+.spu-status {
+   min-height: 150PX;
+   display: flex;
+   flex-direction: column;
+   gap: 8PX;
+   align-items: center;
+   justify-content: center;
+   text-align: center;
+   padding: 0 24PX;
+   font-size: 13PX;
+   line-height: 20PX;
+   color: rgba(60,60,67,.6);
+}
+.spu-status.error {
+   color: #b4552c;
+}
+.spu-retry {
+   margin-top: 4PX;
+   min-width: 72PX;
+   height: 30PX;
+   padding: 0 14PX;
+   border-radius: 10PX;
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   font-size: 13PX;
+   font-weight: 620;
+   background: rgba(31,101,183,.12);
+   color: #1b5fae;
+   box-shadow: inset 0 0 0 1PX rgba(31,101,183,.20);
+}
+.spu-grid {
+   display: grid;
+   grid-template-columns: repeat(3, 1fr);
+   gap: 10PX;
+   padding-bottom: 8PX;
+}
+.spu-card {
+   display: flex;
+   flex-direction: column;
+   align-items: center;
+   gap: 3PX;
+   padding: 8PX 6PX;
+   border-radius: 14PX;
+   background: rgba(255,255,255,.5);
+   box-shadow: inset 0 0 0 1PX rgba(95,149,199,.12), 0 3PX 10PX rgba(31,101,183,.05);
+}
+.spu-card-imgbox {
+   position: relative;
+   width: 76PX;
+   height: 76PX;
+   display: flex;
+   align-items: center;
+   justify-content: center;
+}
+.spu-card-img {
+   width: 100%;
+   height: 100%;
+}
+.spu-card-noimg {
+   width: 100%;
+   height: 100%;
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   border-radius: 10PX;
+   background: rgba(95,149,199,.1);
+   font-size: 11PX;
+   color: rgba(60,60,67,.4);
+}
+.spu-card-badge {
+   position: absolute;
+   right: -2PX;
+   top: -2PX;
+   font-size: 9PX;
+   line-height: 14PX;
+   padding: 0 5PX;
+   border-radius: 999PX;
+   background: rgba(52,148,110,.16);
+   color: #2c7a58;
+}
+.spu-card-title {
+   max-width: 100%;
+   font-size: 12PX;
+   line-height: 17PX;
+   color: #1d1d1f;
+   overflow: hidden;
+   text-overflow: ellipsis;
+   white-space: nowrap;
+}
+.spu-card-type {
+   font-size: 10PX;
+   line-height: 14PX;
+   color: rgba(60,60,67,.45);
+}
+.spu-card-import {
+   margin-top: 2PX;
+   min-width: 56PX;
+   height: 26PX;
+   padding: 0 10PX;
+   border-radius: 9PX;
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   font-size: 12PX;
+   font-weight: 620;
+   background: rgba(31,101,183,.12);
+   color: #1b5fae;
+   box-shadow: inset 0 0 0 1PX rgba(31,101,183,.20);
+}
+.spu-card-import.owned {
+   background: rgba(255,255,255,.35);
+   color: rgba(60,60,67,.5);
+   box-shadow: inset 0 0 0 1PX rgba(95,149,199,.14);
+}
+.spu-card-import.busy {
+   opacity: .6;
+}
