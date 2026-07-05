@@ -75,79 +75,63 @@ function shortJson(v: any, n = 140): string {
   try { return JSON.stringify(v)?.slice(0, n) ?? String(v) } catch (_) { return String(v) }
 }
 
-// DEBUG 版：把 data URL 写成 difile 文件，并把每一步（写入/stat/回读）的原始结果
-// 收集到 report 里，供上层弹窗展示，用来定位真机上到底哪一步出问题。
-// 返回 { path, ok, report }。path 为空表示确认失败。
-export async function writeTempImageWithReport(dataUrl: string): Promise<{ path: string; ok: boolean; report: string }> {
-  const lines: string[] = []
-  if (!dataUrl.startsWith('data:')) return { path: dataUrl, ok: true, report: `src=非data(${dataUrl.slice(0, 12)})` }
-  const fs = (Taro as any).getFileSystemManager?.()
-  const base = (Taro as any).env?.USER_DATA_PATH || 'difile://usr'
-  const comma = dataUrl.indexOf(',')
-  const base64 = comma >= 0 ? dataUrl.slice(comma + 1) : ''
-  lines.push(`b64len=${base64.length} base=${base}`)
-  if (!fs?.writeFile || !base64) return { path: '', ok: false, report: `${lines.join('\n')}\nwriteFile不可用(fs=${!!fs?.writeFile})` }
-  const filePath = `${base}/gooda-export-${Date.now()}.png`
-
-  // 1) 写入（标准 base64 字符串 + encoding:base64）
-  const write = await callOnce<{ ok: boolean; raw: string }>((finish) => {
-    fs.writeFile({
-      filePath, data: base64, encoding: 'base64',
-      success: (r: any) => finish({ ok: true, raw: shortJson(r) }),
-      fail: (e: any) => finish({ ok: false, raw: shortJson(e) }),
-    })
-  }, { ok: false, raw: 'timeout' })
-  lines.push(`write.ok=${write.ok} raw=${write.raw}`)
-  if (!write.ok) return { path: '', ok: false, report: lines.join('\n') }
-
-  // 2) stat 文件大小
-  const stat = await callOnce<string>((finish) => {
-    if (!fs.stat) { finish('no-stat'); return }
-    fs.stat({ path: filePath, success: (r: any) => finish(shortJson(r)), fail: (e: any) => finish('fail:' + shortJson(e)) })
-  }, 'timeout', 3000)
-  lines.push(`stat=${stat}`)
-
-  // 3) 整文件回读（不带 position/length），看长度与 PNG 头
-  const read = await callOnce<string>((finish) => {
-    if (!fs.readFile) { finish('no-readFile'); return }
-    fs.readFile({
-      filePath, encoding: 'base64',
-      success: (r: any) => {
-        const res = Array.isArray(r) ? r[0] : r
-        const d = (res && res.data) != null ? res.data : (typeof res === 'string' ? res : '')
-        finish(`type=${typeof r} dlen=${String(d).length} head=${String(d).slice(0, 12)}`)
-      },
-      fail: (e: any) => finish('fail:' + shortJson(e)),
-    })
-  }, 'timeout', 4000)
-  lines.push(`read=${read}`)
-
-  const ok = read.includes('head=iVBORw0KGgo')
-  return { path: filePath, ok, report: lines.join('\n') }
-}
-
-// Native: persist a data URL to a REAL file under USER_DATA_PATH and return its
-// difile:// path. saveImageToPhotosAlbum needs a real file path — Android's
-// isLegalPath() requires a `difile://` prefix and silently ignores a data URL
-// (no callback fired → "保存没反应"); iOS's UIImage(contentsOfFile:) needs a
-// decodable image file. Returns { path, diag }: path='' on failure.
-export async function dataUrlToTempFileNative(dataUrl: string): Promise<{ path: string; diag: string }> {
-  if (!dataUrl.startsWith('data:')) return { path: dataUrl, diag: 'passthrough' }
-  const fs = (Taro as any).getFileSystemManager?.()
-  const base = (Taro as any).env?.USER_DATA_PATH || 'difile://usr'
-  const comma = dataUrl.indexOf(',')
-  const base64 = comma >= 0 ? dataUrl.slice(comma + 1) : ''
-  if (!fs?.writeFile || !base64) return { path: '', diag: `writeFile 不可用(fs=${!!fs?.writeFile}, b64=${base64.length})` }
-  const filePath = `${base}/gooda-export-${Date.now()}.png`
+// Write the base64 of a data URL to `${base}/name` and return the path (''=fail).
+async function writeImageToBase(fs: any, base64: string, base: string, name: string): Promise<string> {
+  const filePath = `${base}/${name}`
   const wrote = await callOnce<string>((finish) => {
     fs.writeFile({
       filePath, data: base64, encoding: 'base64',
       success: () => finish(''),
-      fail: (err: any) => { console.warn('[gooda-export] writeFile failed', err); finish(errText(err) || '写入失败') },
+      fail: (err: any) => { console.warn('[gooda-export] writeFile failed', base, err); finish(errText(err) || 'fail') },
     })
-  }, '写入超时', 4000)
-  if (wrote) return { path: '', diag: `写文件失败：${wrote}` }
-  return { path: filePath, diag: 'ok' }
+  }, 'timeout', 4000)
+  return wrote ? '' : filePath
+}
+
+// Ground truth from device (千岛 iOS): a difile://usr file is valid on disk
+// (stat ok, PNG header ok) but saveImageToPhotosAlbum / previewImage report
+// "image not found" — the native image VCs don't resolve the USER data dir.
+// The WeChat convention feeds those APIs a TEMP-dir path (what canvasToTempFilePath
+// returns). So try candidate save targets in order and use the first that works:
+//   1) difile://tmp file  2) difile://usr file  3) the data URL itself.
+// Returns { ok, path, report }: path is the source that succeeded (or best-effort
+// last candidate for the long-press preview fallback); report lists each attempt.
+export async function saveImageNativeSmart(dataUrl: string): Promise<{ ok: boolean; path: string; report: string }> {
+  const lines: string[] = []
+  const fs = (Taro as any).getFileSystemManager?.()
+  const usr = (Taro as any).env?.USER_DATA_PATH || 'difile://usr'
+  const isData = dataUrl.startsWith('data:')
+  const comma = dataUrl.indexOf(',')
+  const base64 = isData && comma >= 0 ? dataUrl.slice(comma + 1) : ''
+
+  const candidates: { label: string; path: string }[] = []
+  if (isData && fs?.writeFile && base64) {
+    const name = `gooda-export-${Date.now()}.png`
+    for (const [label, base] of [['tmp', 'difile://tmp'], ['usr', usr]] as const) {
+      const p = await writeImageToBase(fs, base64, base, name)
+      lines.push(`write.${label}=${p ? 'ok' : 'fail'}`)
+      if (p) candidates.push({ label, path: p })
+    }
+    candidates.push({ label: 'dataurl', path: dataUrl })
+  } else {
+    // resultSrc is already a path (rare on native) — save it directly.
+    candidates.push({ label: 'src', path: dataUrl })
+  }
+
+  let last = ''
+  for (const c of candidates) {
+    last = c.path
+    const r = await callOnce<string>((finish) => {
+      Taro.saveImageToPhotosAlbum({
+        filePath: c.path,
+        success: () => finish('ok'),
+        fail: (err: any) => finish('fail:' + (errText(err) || shortJson(err, 60))),
+      })
+    }, 'timeout', 8000)
+    lines.push(`save[${c.label}]=${r}`)
+    if (r === 'ok') return { ok: true, path: c.path, report: lines.join('\n') }
+  }
+  return { ok: false, path: last, report: lines.join('\n') }
 }
 
 // Convert any image source to a data URL. H5 uses fetch+FileReader (falls back to a

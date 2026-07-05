@@ -312,7 +312,7 @@ import {
 import { createKvStore } from '../../services/storage/kv-store'
 import { cropImageFrame, normalizeCropRect, denormalizeCropRect } from './crop-math'
 import { measureRect } from '../../platform/measure'
-import { imageSizeFromLocalFile, imageSourceToDataUrl, remoteImageToDataUrl, writeTempImageWithReport } from '../../platform/image-io'
+import { imageSizeFromLocalFile, imageSourceToDataUrl, remoteImageToDataUrl, saveImageNativeSmart } from '../../platform/image-io'
 import { resolveQiandaoSpuService, QiandaoSpuServiceError } from '../../services/qiandao/client'
 import { bestSpuImage, inferGuziSubFromSpu } from '../../services/qiandao/types'
 import type { QiandaoSpuSummary } from '../../services/qiandao/types'
@@ -2805,60 +2805,38 @@ function previewSaveFallback(path: string) {
   })
 }
 
-// DEBUG 版保存：把每一步（写文件/stat/回读/直存）的原始结果汇总成一份报告，
-// 直存失败时用弹窗展示，便于真机截图定位。定位清楚后会精简回正常提示。
 async function saveExportImage() {
   if (!resultSrc.value) return
   if (process.env.TARO_ENV === 'h5') {
     await saveH5ExportImage(resultSrc.value)
     return
   }
-  const lines: string[] = []
-  let path = resultSrc.value
+  // 原生（Dimina/千岛）：canvasToTempFilePath 返回 data URL，而存相册/预览的原生
+  // 图片 VC 只认临时目录路径（difile://usr 会报 image not found）。smart 保存会
+  // 依次尝试 difile://tmp 文件 → difile://usr 文件 → data URL，第一个成功即用。
   Taro.showLoading({ title: '保存中' })
+  let res: { ok: boolean; path: string; report: string }
   try {
-    if (path.startsWith('data:')) {
-      const w = await writeTempImageWithReport(path)
-      lines.push(w.report)
-      path = w.path
-    } else {
-      lines.push(`src=path ${path.slice(0, 28)}`)
-    }
+    res = await saveImageNativeSmart(resultSrc.value)
   } finally {
     Taro.hideLoading()
   }
-  if (!path) {
-    saveError(lines.join('\n'))
-    return
-  }
-  // 尝试直存，拿到原始结果
-  const save = await new Promise<string>((resolve) => {
-    Taro.saveImageToPhotosAlbum({
-      filePath: path,
-      success: () => resolve('ok'),
-      fail: (err: any) => resolve('fail:' + (errMsgOf(err) || shortErr(err))),
-    })
-  })
-  lines.push(`save=${save}`)
-  if (save === 'ok') {
+  if (res.ok) {
     Taro.showToast({ title: '已保存到相册', icon: 'none' })
     return
   }
-  // 直存失败：先把诊断报告展示出来（含文件是否有效 PNG + 直存原始错误），
-  // 用户确认后再打开原生大图兜底长按存图。
+  // 全部直存失败：兜底打开原生大图，用户长按走系统「存储图片」。附带诊断以便定位。
+  console.warn('[gooda-export] save failed\n' + res.report)
   Taro.showModal({
-    title: '保存诊断',
-    content: lines.join('\n'),
+    title: '保存失败',
+    content: `已尝试多种方式仍失败，可点「打开大图」长按保存。\n${res.report}`,
     confirmText: '打开大图',
     cancelText: '关闭',
     success: (r: any) => {
-      const res = Array.isArray(r) ? r[0] : r
-      if (res && res.confirm) previewSaveFallback(path)
+      const rr = Array.isArray(r) ? r[0] : r
+      if (rr && rr.confirm && res.path) previewSaveFallback(res.path)
     },
   })
-}
-function shortErr(err: any): string {
-  try { return JSON.stringify(Array.isArray(err) ? err[0] : err).slice(0, 80) } catch (_) { return String(err) }
 }
 </script>
 
