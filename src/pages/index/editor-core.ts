@@ -208,11 +208,25 @@ export function drawCroppedRoundedImage(ctx: any, img: any, x: number, y: number
   ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h)
   ctx.restore()
 }
+// 短标签，便于把加载失败的图片来源类型报给用户 / 日志（不泄露完整 data 内容）。
+export function srcKind(src: string): string {
+  if (!src) return 'empty'
+  if (src.startsWith('data:')) return 'data-url'
+  if (src.startsWith('blob:')) return 'blob'
+  if (src.startsWith('http://')) return 'http'
+  if (src.startsWith('https://')) return 'https'
+  if (src.startsWith('difile://') || src.startsWith('dfile://')) return 'difile'
+  if (src.startsWith('file://') || src.startsWith('wxfile://')) return 'file'
+  if (src.startsWith('/')) return 'abs-path'
+  return 'rel-path'
+}
 export function loadImg(node: any, src: string): Promise<any> {
   return new Promise((resolve, reject) => {
     const img = node && node.createImage ? node.createImage() : new Image()
     img.onload = () => resolve(img)
-    img.onerror = reject
+    // 把来源类型带进错误，方便区分"是哪种图挂了"（编译资源 / data URL / 远程 / difile）。
+    img.onerror = (e: any) =>
+      reject(new Error(`image load failed [${srcKind(src)}] ${(e && e.errMsg) || ''}`.trim()))
     img.src = src
   })
 }

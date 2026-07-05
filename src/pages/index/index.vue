@@ -2689,12 +2689,12 @@ async function exportImage() {
   resultSrc.value = ''
   resultPreviewOpen.value = false
   exportHistoryOpen.value = false
-  let failed = false
+  let result: Awaited<ReturnType<typeof exportEditorImage>> | undefined
   Taro.showLoading({ title: '导出中' })
   try {
     syncBoardTransformFromLayer()
     saveWork(false)
-    const src = await exportEditorImage({
+    result = await exportEditorImage({
       canvasId: 'exportCanvas',
       cw,
       ch,
@@ -2704,17 +2704,26 @@ async function exportImage() {
       boardLayer: hasBoardLayer.value ? { ...boardLayer } : undefined,
       layers: cloneLayers(),
     })
-    if (src) {
-      resultSrc.value = src
-      await addExportHistory(src)
+    if (result.ok) {
+      resultSrc.value = result.src
+      await addExportHistory(result.src)
       resultPreviewOpen.value = true
-    } else {
-      failed = true
     }
+  } catch (err: any) {
+    result = { ok: false, stage: 'unexpected', detail: (err && (err.message || err.errMsg)) || String(err) }
   } finally {
     Taro.hideLoading()
   }
-  if (failed) Taro.showToast({ title: '导出失败，请重试', icon: 'none' })
+  if (result && !result.ok) {
+    // 分级、可截图的错误：让用户能把"卡在哪一步"直接发回来，而不是只有"请重试"。
+    console.warn('[gooda-export] failed', result.stage, result.detail)
+    Taro.showModal({
+      title: '导出失败',
+      content: `阶段：${result.stage}\n${result.detail}`,
+      showCancel: false,
+      confirmText: '知道了',
+    })
+  }
 }
 function closeExportPreview() {
   resultPreviewOpen.value = false
