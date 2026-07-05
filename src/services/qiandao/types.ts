@@ -37,6 +37,18 @@ function firstString(...values: unknown[]): string | undefined {
   return undefined
 }
 
+// Detail occasionally returns OSS-style references while search returns CDN URLs for
+// the same image. Normalize the known treasure bucket shape before proxying/downloading.
+export function normalizeQiandaoImageUrl(url?: string): string | undefined {
+  if (!url) return undefined
+  const trimmed = url.trim()
+  const prefix = 'echotechoss://user-treasure-v2.image/'
+  if (trimmed.startsWith(prefix)) {
+    return `https://treasure.qiandaocdn.com/treasure/images/${trimmed.slice(prefix.length)}`
+  }
+  return trimmed
+}
+
 // 容错映射：id/spuId、name/title、image/mainImage/cover、whiteBgPng/transparentImage……
 // 单条记录可能是 spu 对象本身，也可能包在 { spu } / { librarySpu } 里（详情接口两种都见过）。
 export function normalizeQiandaoSpu(raw: any): QiandaoSpuSummary | undefined {
@@ -49,8 +61,8 @@ export function normalizeQiandaoSpu(raw: any): QiandaoSpuSummary | undefined {
   return {
     id: `${id}`,
     title: firstString(source.name, source.title, source.spuName) || `SPU ${id}`,
-    image: firstString(source.image, source.mainImage, source.cover, source.coverImage, images[0]),
-    transparentImage: firstString(source.whiteBgPng, source.transparentImage, source.whiteImage, source.cutoutImage),
+    image: normalizeQiandaoImageUrl(firstString(source.image, source.mainImage, source.cover, source.coverImage, images[0])),
+    transparentImage: normalizeQiandaoImageUrl(firstString(source.whiteBgPng, source.transparentImage, source.whiteImage, source.cutoutImage)),
     sourceUrl: firstString(source.sourceUrl, source.url, source.link),
     typeId: source.typeId !== undefined && source.typeId !== null ? `${source.typeId}` : undefined,
     typeName: firstString(source.typeName, source.categoryName),

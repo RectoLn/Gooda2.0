@@ -28,16 +28,16 @@ SPU 资料库导入已接线（`client.ts` + `types.ts` + 编辑器的 SpuSearch
 - `normalizeQiandaoSpu` 做字段容错映射；图片优先级：透明图（whiteBgPng）> 主图。
 - 用户账号同步仍未接。
 
-## Backend Proxy Contract（待后端提供）
+## Backend Proxy Contract（已由 `backend/` 实现）
 
-前端假设代理是官方开放平台 OpenAPI 的**纯转发**（服务端注入 `access-token` /
-`x-echo-qdmp-version`，appSecret 只存在于服务端）：
+代理是官方开放平台 OpenAPI 的**纯转发**（服务端 CLIENT_CREDENTIALS 换票 + Bearer 头，
+appSecret 只存在于服务端），实现与配置见 `backend/README.md`：
 
 - `GET {TARO_APP_SPU_PROXY_BASE}/spu/v1/search?keyword=&offset=&limit=`
-  → `{ code: 0, data: { items: [ { id, name, image, whiteBgPng?, typeId, typeName, ... } ], totalCount } }`
-  （对应 OpenAPI `GET /spu/v1/search`）
+  → `{ code: "0", data: { items: [ librarySpuItem ], totalCount } }`
+  （对应 OpenAPI `GET /spu/v1/search`；offset+limit ≤ 100，代理端已钳制）
 - `GET {TARO_APP_SPU_PROXY_BASE}/spu/v1/detail?id=`
-  → `{ code: 0, data: { spu: { id, name, image, whiteBgPng, typeId, typeName, ... } } }`
+  → `{ code: "0", data: { spu: { id, name, image, whiteBgPng, typeId, typeName, ... } } }`
   （对应 OpenAPI `GET /spu/v1/detail`）
-- 建议追加：图片代理（如 `GET /spu/v1/image?url=`），因为 CDN 图片可能有防盗链 /
-  缺 CORS 头，H5 端 fetch 会失败；小程序端 downloadFile 也可能被 referer 拦截。
+- `GET {TARO_APP_SPU_PROXY_BASE}/spu/v1/image?url=` 图片代理（防盗链/CORS），仅放行
+  千岛系 CDN 域名；`HttpQiandaoSpuClient` 会把 SPU 图片 URL 自动改写到这条路由。

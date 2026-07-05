@@ -44,6 +44,21 @@ async function requestJson(url: string): Promise<any> {
 export class HttpQiandaoSpuClient implements QiandaoSpuClient {
   constructor(private readonly baseUrl: string) {}
 
+  // CDN 图片有防盗链且缺 CORS 头：预览 <image> 和 fetch 下载都可能被拦。统一改写成
+  // 走后端的 /spu/v1/image 代理（同源、可缓存），data URL / 非 http 源保持原样。
+  private proxyImageUrl(raw?: string): string | undefined {
+    if (!raw || !/^https?:\/\//i.test(raw)) return raw
+    return `${this.baseUrl}/spu/v1/image?url=${encodeURIComponent(raw)}`
+  }
+
+  private withProxiedImages(spu: QiandaoSpuSummary): QiandaoSpuSummary {
+    return {
+      ...spu,
+      image: this.proxyImageUrl(spu.image),
+      transparentImage: this.proxyImageUrl(spu.transparentImage),
+    }
+  }
+
   async searchSpu(params: QiandaoSpuSearchParams): Promise<QiandaoSpuSearchResult> {
     const page = Math.max(1, params.page || 1)
     const pageSize = Math.max(1, params.pageSize || 20)
@@ -51,12 +66,13 @@ export class HttpQiandaoSpuClient implements QiandaoSpuClient {
     const query = `keyword=${encodeURIComponent(params.keyword)}&offset=${offset}&limit=${pageSize}`
     const data = await requestJson(`${this.baseUrl}/spu/v1/search?${query}`)
     const total = typeof data?.totalCount === 'number' ? data.totalCount : typeof data?.total === 'number' ? data.total : undefined
-    return { items: normalizeQiandaoSpuList(data), page, pageSize, total }
+    return { items: normalizeQiandaoSpuList(data).map((item) => this.withProxiedImages(item)), page, pageSize, total }
   }
 
   async getSpuDetail(id: string): Promise<QiandaoSpuSummary | undefined> {
     const data = await requestJson(`${this.baseUrl}/spu/v1/detail?id=${encodeURIComponent(id)}`)
-    return normalizeQiandaoSpu(data)
+    const spu = normalizeQiandaoSpu(data)
+    return spu ? this.withProxiedImages(spu) : undefined
   }
 }
 
