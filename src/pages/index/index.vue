@@ -312,7 +312,7 @@ import {
 import { createKvStore } from '../../services/storage/kv-store'
 import { cropImageFrame, normalizeCropRect, denormalizeCropRect } from './crop-math'
 import { measureRect } from '../../platform/measure'
-import { imageSizeFromLocalFile, imageSourceToDataUrl, remoteImageToDataUrl, dataUrlToTempFileNative } from '../../platform/image-io'
+import { imageSizeFromLocalFile, imageSourceToDataUrl, remoteImageToDataUrl, writeTempImageWithReport } from '../../platform/image-io'
 import { resolveQiandaoSpuService, QiandaoSpuServiceError } from '../../services/qiandao/client'
 import { bestSpuImage, inferGuziSubFromSpu } from '../../services/qiandao/types'
 import type { QiandaoSpuSummary } from '../../services/qiandao/types'
@@ -2805,46 +2805,60 @@ function previewSaveFallback(path: string) {
   })
 }
 
+// DEBUG 版保存：把每一步（写文件/stat/回读/直存）的原始结果汇总成一份报告，
+// 直存失败时用弹窗展示，便于真机截图定位。定位清楚后会精简回正常提示。
 async function saveExportImage() {
   if (!resultSrc.value) return
   if (process.env.TARO_ENV === 'h5') {
     await saveH5ExportImage(resultSrc.value)
     return
   }
-  // 原生（Dimina/千岛）：saveImageToPhotosAlbum 只认真实文件路径。导出得到的是
-  // data URL（canvasToTempFilePath 在 Dimina 返回 toDataURL），Android 的
-  // isLegalPath 会直接判定 data URL 非法而"静默不保存"——表现为点击没反应。
-  // 先把 data URL 落成 difile:// 真实文件，再存相册。
-  let filePath = resultSrc.value
-  if (filePath.startsWith('data:')) {
-    Taro.showLoading({ title: '保存中' })
-    let diag = 'ok'
-    try {
-      const res = await dataUrlToTempFileNative(filePath)
-      filePath = res.path
-      diag = res.diag
-    } finally {
-      Taro.hideLoading()
+  const lines: string[] = []
+  let path = resultSrc.value
+  Taro.showLoading({ title: '保存中' })
+  try {
+    if (path.startsWith('data:')) {
+      const w = await writeTempImageWithReport(path)
+      lines.push(w.report)
+      path = w.path
+    } else {
+      lines.push(`src=path ${path.slice(0, 28)}`)
     }
-    if (!filePath) {
-      saveError(diag)
-      return
-    }
+  } finally {
+    Taro.hideLoading()
   }
-  if (!filePath || filePath.startsWith('data:')) {
-    saveError('无法写入临时文件（getFileSystemManager.writeFile 不可用或失败）')
+  if (!path) {
+    saveError(lines.join('\n'))
     return
   }
-  const path = filePath
-  Taro.saveImageToPhotosAlbum({
-    filePath: path,
-    success: () => Taro.showToast({ title: '已保存到相册', icon: 'none' }),
-    // 直存失败（iOS 不解析 difile / 宿主相册权限）→ 兜底到长按存图，不再直接报错。
-    fail: (err: any) => {
-      console.warn('[gooda-export] saveImageToPhotosAlbum failed', errMsgOf(err))
-      previewSaveFallback(path)
+  // 尝试直存，拿到原始结果
+  const save = await new Promise<string>((resolve) => {
+    Taro.saveImageToPhotosAlbum({
+      filePath: path,
+      success: () => resolve('ok'),
+      fail: (err: any) => resolve('fail:' + (errMsgOf(err) || shortErr(err))),
+    })
+  })
+  lines.push(`save=${save}`)
+  if (save === 'ok') {
+    Taro.showToast({ title: '已保存到相册', icon: 'none' })
+    return
+  }
+  // 直存失败：先把诊断报告展示出来（含文件是否有效 PNG + 直存原始错误），
+  // 用户确认后再打开原生大图兜底长按存图。
+  Taro.showModal({
+    title: '保存诊断',
+    content: lines.join('\n'),
+    confirmText: '打开大图',
+    cancelText: '关闭',
+    success: (r: any) => {
+      const res = Array.isArray(r) ? r[0] : r
+      if (res && res.confirm) previewSaveFallback(path)
     },
   })
+}
+function shortErr(err: any): string {
+  try { return JSON.stringify(Array.isArray(err) ? err[0] : err).slice(0, 80) } catch (_) { return String(err) }
 }
 </script>
 

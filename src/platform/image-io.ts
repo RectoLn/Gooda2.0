@@ -63,37 +63,74 @@ function errText(err: any): string {
   return (e && (e.errMsg || e.message)) || ''
 }
 
-// Read back the first bytes and check the PNG magic (base64 "iVBORw0KGgo"),
-// so we can tell a valid image file from a runtime that wrote garbage (e.g. a
-// strict base64 decoder that fell back to writing the base64 TEXT).
-function verifyPngFile(fs: any, filePath: string): Promise<string> {
-  if (!fs?.readFile) return Promise.resolve('ok') // can't verify → assume ok
-  return new Promise((resolve) => {
+function callOnce<T>(run: (finish: (v: T) => void) => void, timeoutVal: T, ms = 4000): Promise<T> {
+  return new Promise<T>((resolve) => {
     let done = false
-    const finish = (v: string) => { if (!done) { done = true; resolve(v) } }
-    const timer = setTimeout(() => finish('ok'), 3000) // don't block save on a slow read
-    fs.readFile({
-      filePath,
-      encoding: 'base64',
-      position: 0,
-      length: 32,
-      success: (res: any) => {
-        clearTimeout(timer)
-        const data = (firstResult(res)?.data) || ''
-        finish(typeof data === 'string' && data.startsWith('iVBORw0KGgo') ? 'ok' : `badsig:${String(data).slice(0, 10)}`)
-      },
-      fail: () => { clearTimeout(timer); finish('ok') },
-    })
+    const finish = (v: T) => { if (!done) { done = true; resolve(v) } }
+    const timer = setTimeout(() => finish(timeoutVal), ms)
+    run((v: T) => { clearTimeout(timer); finish(v) })
   })
+}
+function shortJson(v: any, n = 140): string {
+  try { return JSON.stringify(v)?.slice(0, n) ?? String(v) } catch (_) { return String(v) }
+}
+
+// DEBUG 版：把 data URL 写成 difile 文件，并把每一步（写入/stat/回读）的原始结果
+// 收集到 report 里，供上层弹窗展示，用来定位真机上到底哪一步出问题。
+// 返回 { path, ok, report }。path 为空表示确认失败。
+export async function writeTempImageWithReport(dataUrl: string): Promise<{ path: string; ok: boolean; report: string }> {
+  const lines: string[] = []
+  if (!dataUrl.startsWith('data:')) return { path: dataUrl, ok: true, report: `src=非data(${dataUrl.slice(0, 12)})` }
+  const fs = (Taro as any).getFileSystemManager?.()
+  const base = (Taro as any).env?.USER_DATA_PATH || 'difile://usr'
+  const comma = dataUrl.indexOf(',')
+  const base64 = comma >= 0 ? dataUrl.slice(comma + 1) : ''
+  lines.push(`b64len=${base64.length} base=${base}`)
+  if (!fs?.writeFile || !base64) return { path: '', ok: false, report: `${lines.join('\n')}\nwriteFile不可用(fs=${!!fs?.writeFile})` }
+  const filePath = `${base}/gooda-export-${Date.now()}.png`
+
+  // 1) 写入（标准 base64 字符串 + encoding:base64）
+  const write = await callOnce<{ ok: boolean; raw: string }>((finish) => {
+    fs.writeFile({
+      filePath, data: base64, encoding: 'base64',
+      success: (r: any) => finish({ ok: true, raw: shortJson(r) }),
+      fail: (e: any) => finish({ ok: false, raw: shortJson(e) }),
+    })
+  }, { ok: false, raw: 'timeout' })
+  lines.push(`write.ok=${write.ok} raw=${write.raw}`)
+  if (!write.ok) return { path: '', ok: false, report: lines.join('\n') }
+
+  // 2) stat 文件大小
+  const stat = await callOnce<string>((finish) => {
+    if (!fs.stat) { finish('no-stat'); return }
+    fs.stat({ path: filePath, success: (r: any) => finish(shortJson(r)), fail: (e: any) => finish('fail:' + shortJson(e)) })
+  }, 'timeout', 3000)
+  lines.push(`stat=${stat}`)
+
+  // 3) 整文件回读（不带 position/length），看长度与 PNG 头
+  const read = await callOnce<string>((finish) => {
+    if (!fs.readFile) { finish('no-readFile'); return }
+    fs.readFile({
+      filePath, encoding: 'base64',
+      success: (r: any) => {
+        const res = Array.isArray(r) ? r[0] : r
+        const d = (res && res.data) != null ? res.data : (typeof res === 'string' ? res : '')
+        finish(`type=${typeof r} dlen=${String(d).length} head=${String(d).slice(0, 12)}`)
+      },
+      fail: (e: any) => finish('fail:' + shortJson(e)),
+    })
+  }, 'timeout', 4000)
+  lines.push(`read=${read}`)
+
+  const ok = read.includes('head=iVBORw0KGgo')
+  return { path: filePath, ok, report: lines.join('\n') }
 }
 
 // Native: persist a data URL to a REAL file under USER_DATA_PATH and return its
 // difile:// path. saveImageToPhotosAlbum needs a real file path — Android's
 // isLegalPath() requires a `difile://` prefix and silently ignores a data URL
 // (no callback fired → "保存没反应"); iOS's UIImage(contentsOfFile:) needs a
-// decodable image file. Returns { path, diag }: path='' on failure, diag carries
-// a human-readable reason for the caller to surface. A ~4s timeout guards against
-// a runtime whose writeFile callback never fires (avoids a stuck spinner).
+// decodable image file. Returns { path, diag }: path='' on failure.
 export async function dataUrlToTempFileNative(dataUrl: string): Promise<{ path: string; diag: string }> {
   if (!dataUrl.startsWith('data:')) return { path: dataUrl, diag: 'passthrough' }
   const fs = (Taro as any).getFileSystemManager?.()
@@ -102,38 +139,14 @@ export async function dataUrlToTempFileNative(dataUrl: string): Promise<{ path: 
   const base64 = comma >= 0 ? dataUrl.slice(comma + 1) : ''
   if (!fs?.writeFile || !base64) return { path: '', diag: `writeFile 不可用(fs=${!!fs?.writeFile}, b64=${base64.length})` }
   const filePath = `${base}/gooda-export-${Date.now()}.png`
-  // Prefer writing an ArrayBuffer: it goes through Dimina's tested arraybuffer→
-  // base64 native decode path and sidesteps strict base64-string decoders that
-  // silently write the raw base64 text instead of the decoded bytes → black image.
-  let data: any = base64
-  let encoding: string | undefined = 'base64'
-  try {
-    const bytes = base64ToBytes(base64)
-    if (bytes && bytes.length > 8) {
-      data = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
-      encoding = undefined
-    }
-  } catch (_) { /* fall back to base64 string */ }
-  const wrote = await new Promise<string>((resolve) => {
-    let done = false
-    const finish = (v: string) => { if (!done) { done = true; resolve(v) } }
-    const timer = setTimeout(() => finish('写入超时'), 4000)
-    const opts: any = {
-      filePath,
-      data,
-      success: () => { clearTimeout(timer); finish('') },
-      fail: (err: any) => {
-        clearTimeout(timer)
-        console.warn('[gooda-export] writeFile failed', err)
-        finish(errText(err) || '写入失败')
-      },
-    }
-    if (encoding) opts.encoding = encoding
-    fs.writeFile(opts)
-  })
+  const wrote = await callOnce<string>((finish) => {
+    fs.writeFile({
+      filePath, data: base64, encoding: 'base64',
+      success: () => finish(''),
+      fail: (err: any) => { console.warn('[gooda-export] writeFile failed', err); finish(errText(err) || '写入失败') },
+    })
+  }, '写入超时', 4000)
   if (wrote) return { path: '', diag: `写文件失败：${wrote}` }
-  const sig = await verifyPngFile(fs, filePath)
-  if (sig !== 'ok') return { path: '', diag: `文件校验失败(${sig})：图片未正确编码` }
   return { path: filePath, diag: 'ok' }
 }
 
