@@ -1634,9 +1634,8 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
 }
 
 .layer-row.on {
-   /* 选中态：淡蓝底高亮带，替代阴影卡片 */
-   background: rgba(238,247,255,.95);
-   color: var(--blue-strong);
+   /* 选中态：淡蓝底高亮带（对齐 mockup 的 #dce7f6） */
+   background: #dce7f6;
 }
 
 .layer-row.fixed {
@@ -1706,9 +1705,16 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
    font-family: var(--font-serif);
    font-size: 13PX;
    line-height: 20PX;
+   /* 默认黑色，仅选中态转深蓝 */
+   color: #1d1d1f;
    overflow: hidden;
    white-space: nowrap;
    text-overflow: ellipsis;
+}
+
+.layer-row.on .layer-row-name {
+   color: var(--blue-strong);
+   font-weight: 600;
 }
 
 .row-lock {
@@ -2379,30 +2385,31 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
 }
 
 .import-editor-label {
-   margin-bottom: 7PX;
+   margin-bottom: 8PX;
    font-family: var(--font-serif);
    font-size: 13PX;
    line-height: 16PX;
-   color: rgba(60,60,67,.68);
+   /* 浅灰字段标签（对齐 mockup） */
+   color: #9aa1ab;
 }
 
 .import-editor-input {
    width: 100%;
-   height: 34PX;
+   height: 40PX;
    min-width: 0;
-   padding: 0 10PX;
+   padding: 0 12PX;
    border-radius: 10PX;
    border: 0;
-   /* 蓝白简约：干净的浅灰填充输入框 + hairline 描边 */
-   background: #f4f7fb;
+   /* 干净的浅灰填充输入框，无描边（对齐 mockup） */
+   background: #f0f2f6;
    color: #1d1d1f;
    font-family: var(--font-serif);
    font-size: 15PX;
-   line-height: 34PX;
+   line-height: 40PX;
    box-sizing: border-box;
    display: flex;
    align-items: center;
-   box-shadow: inset 0 0 0 1PX rgba(95,149,199,.14);
+   box-shadow: none;
    background-clip: padding-box;
 }
 
@@ -2413,20 +2420,20 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
 }
 
 .import-editor-type {
-   height: 28PX;
-   padding: 0 12PX;
+   height: 32PX;
+   padding: 0 15PX;
    border-radius: 999PX;
    display: flex;
    align-items: center;
    justify-content: center;
-   /* 蓝白简约：未选=白底 hairline 描边 */
-   background: #fff;
+   /* 未选=浅灰实心胶囊、无描边（严格对齐 mockup） */
+   background: #f0f2f6;
    border: 0;
-   color: #5f6b7d;
+   color: #828b9a;
    font-family: var(--font-serif);
    font-size: 13PX;
    box-sizing: border-box;
-   box-shadow: inset 0 0 0 1PX rgba(95,149,199,.22);
+   box-shadow: none;
    background-clip: padding-box;
 }
 
@@ -2441,40 +2448,40 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
 .import-editor-shapes {
    display: grid;
    grid-template-columns: repeat(3, 1fr);
-   gap: 7PX;
+   gap: 8PX;
 }
 
 .import-editor-shape {
-   height: 42PX;
+   height: 40PX;
    border-radius: 12PX;
    display: flex;
    align-items: center;
    justify-content: center;
-   gap: 6PX;
-   /* 蓝白简约：未选=白底 hairline 描边 */
-   background: #fff;
+   gap: 7PX;
+   /* 未选=浅灰实心胶囊、无描边（与类型 tag 一致） */
+   background: #f0f2f6;
    border: 0;
-   color: #5f6b7d;
+   color: #828b9a;
    font-family: var(--font-serif);
-   font-size: 12PX;
+   font-size: 13PX;
    box-sizing: border-box;
-   box-shadow: inset 0 0 0 1PX rgba(95,149,199,.22);
+   box-shadow: none;
    background-clip: padding-box;
 }
 
 .import-editor-shape.on {
-   /* 选中=实心中蓝 + 白字（mockup 选中色 ≈ --blue-soft，比深蓝 #1f65b7 柔和） */
+   /* 选中=实心中蓝 + 白字（图标 border 跟随 currentColor → 白框） */
    background: var(--blue-soft, #5f95c7);
    color: #fff;
    font-weight: 620;
-   box-shadow: none;
 }
 
 .import-shape-icon {
-   width: 18PX;
-   height: 18PX;
+   width: 16PX;
+   height: 16PX;
    border: 2PX solid currentColor;
    box-sizing: border-box;
+   flex: 0 0 16PX;
 }
 
 .import-shape-icon.circle {
