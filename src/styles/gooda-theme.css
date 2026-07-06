@@ -1201,7 +1201,8 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
    bottom: 0;
    width: 48PX;
    height: 15PX;
-   transform: translateX(-50%) rotate(-1.5deg);
+   /* 选中态下划线整体右上偏移 4px */
+   transform: translateX(-50%) translate(4PX, -4PX) rotate(-1.5deg);
    opacity: .86;
    filter: saturate(1.02);
    pointer-events: none;
@@ -1214,8 +1215,9 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
    line-height: 1;
    opacity: .78;
    pointer-events: none;
-   right: 9PX;
-   top: 7PX;
+   /* 选中态星星整体右上偏移 4px（right 变小=右移，top 变小=上移） */
+   right: 5PX;
+   top: 3PX;
    font-size: 7PX;
    filter: saturate(1.12) drop-shadow(0 1PX 3PX rgba(31,101,183,.12));
 }
