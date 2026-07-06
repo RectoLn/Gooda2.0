@@ -45,7 +45,6 @@
               @touchend.stop="$emit('row-drag-touch-end')"
               @mousedown.stop="!ly.fixed && $emit('row-drag-mouse-down', $event, ly, idx)"
             ><text class="row-drag-icon">≡</text></view>
-            <view class="layer-dot" :class="ly.shape" :style="{ background: ly.color }" />
             <text class="layer-row-name">{{ ly.label }}</text>
             <view class="row-lock" :class="{ on: ly.locked }" @tap.stop="$emit('toggle-lock', ly.id)">
               <image class="row-lock-icon" :src="ly.locked ? lockStateIcon : unlockStateIcon" mode="aspectFit" />

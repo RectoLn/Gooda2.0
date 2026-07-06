@@ -1587,25 +1587,27 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
 }
 
 .layer-list {
-   margin-top: 10PX;
+   margin-top: 6PX;
    display: flex;
    flex-direction: column;
-   gap: 6PX;
+   /* 蓝白简约：连续清单，行与行之间用 hairline 分割，不再逐行卡片 */
+   gap: 0;
 }
 
 .layer-slot {
-   height: 36PX;
+   height: 50PX;
    display: grid;
    grid-template-columns: 24PX 1fr;
    align-items: center;
    gap: 6PX;
+   border-bottom: 1PX solid rgba(95,149,199,.12);
 }
 
 .layer-rank {
    color: rgba(60,60,67,.48);
    font-size: 12PX;
    font-weight: 650;
-   line-height: 36PX;
+   line-height: 46PX;
    text-align: center;
    font-variant-numeric: tabular-nums;
    pointer-events: none;
@@ -1613,21 +1615,23 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
 
 .layer-row {
    position: relative;
-   height: 36PX;
+   height: 46PX;
    display: grid;
-   grid-template-columns: 26PX 18PX 1fr 24PX;
+   grid-template-columns: 26PX 1fr 24PX;
    align-items: center;
    gap: 8PX;
-   border-radius: 10PX;
+   border-radius: 8PX;
    padding: 0 7PX 0 4PX;
-   background: rgba(248,250,252,.82);
+   /* 蓝白简约：resting 态透明（分割靠 slot 的 hairline），去掉逐行卡片底 */
+   background: transparent;
    transform: translate3d(0, var(--row-shift, 0), 0);
    transition: transform .24s cubic-bezier(.2,.85,.2,1), background .18s ease, box-shadow .18s ease, opacity .18s ease;
    will-change: transform;
 }
 
 .layer-row.on {
-   background: rgba(238,247,255,.72);
+   /* 选中态：淡蓝底高亮带，替代阴影卡片 */
+   background: rgba(238,247,255,.95);
    color: var(--blue-strong);
 }
 
@@ -1680,7 +1684,7 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
 
 .row-drag {
    width: 26PX;
-   height: 36PX;
+   height: 46PX;
    display: flex;
    align-items: center;
    justify-content: center;
@@ -1694,13 +1698,6 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
    line-height: 15PX;
 }
 
-.layer-dot {
-   width: 18PX;
-   height: 18PX;
-   border-radius: 5PX;
-   border: 1PX solid rgba(0,0,0,.08);
-}
-
 .layer-row-name {
    font-family: var(--font-serif);
    font-size: 13PX;
@@ -1712,7 +1709,7 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
 
 .row-lock {
    width: 24PX;
-   height: 32PX;
+   height: 42PX;
    display: flex;
    align-items: center;
    justify-content: center;
@@ -2057,13 +2054,15 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
    box-sizing: border-box;
 }
 .import-topbar-btn.primary {
-   background: rgba(31,101,183,.12);
-   color: #1b5fae;
-   box-shadow: 0 3PX 8PX rgba(31,101,183,.045), inset 0 0 0 1PX rgba(31,101,183,.20), inset 0 1PX 0 rgba(255,255,255,.44);
+   /* 蓝白简约：主操作实心蓝胶囊（顶部原生胶囊安全区 128PX 不变） */
+   background: var(--blue-strong, #1f65b7);
+   color: #fff;
+   box-shadow: 0 2PX 6PX rgba(31,101,183,.22);
 }
 
 /* the stage grabs all the height the top bar + drawer leave behind */
 .import-stage-wrap {
+   position: relative;
    flex: 1 1 auto;
    min-height: 0;
    display: flex;
@@ -2098,7 +2097,8 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
 .import-drawer-body {
    display: flex;
    flex-direction: column;
-   gap: 12PX;
+   /* 蓝白简约：字段间距靠 field 的上下 padding + hairline 分割，不再用 gap 堆卡片 */
+   gap: 0;
 }
 .import-drawer.collapsed .import-drawer-body {
    display: none;
@@ -2363,13 +2363,15 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
 }
 
 .import-editor-field {
-   border-radius: 16PX;
-   padding: 10PX;
+   /* 蓝白简约：去圆角描边容器 → 统一间距 + hairline 分割线的表单节奏 */
+   padding: 12PX 0;
    box-sizing: border-box;
-   background: rgba(255,255,255,.38);
+   background: transparent;
    border: 0;
-   box-shadow: inset 0 0 0 1PX rgba(95,149,199,.10), inset 0 1PX 0 rgba(255,255,255,.44);
-   background-clip: padding-box;
+   border-bottom: 1PX solid rgba(95,149,199,.14);
+}
+.import-editor-field:last-child {
+   border-bottom: 0;
 }
 
 .import-editor-label {
@@ -2387,7 +2389,8 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
    padding: 0 10PX;
    border-radius: 10PX;
    border: 0;
-   background: rgba(255,255,255,.48);
+   /* 蓝白简约：干净的浅灰填充输入框 + hairline 描边 */
+   background: #f4f7fb;
    color: #1d1d1f;
    font-family: var(--font-serif);
    font-size: 15PX;
@@ -2395,7 +2398,7 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
    box-sizing: border-box;
    display: flex;
    align-items: center;
-   box-shadow: inset 0 0 0 1PX rgba(95,149,199,.12);
+   box-shadow: inset 0 0 0 1PX rgba(95,149,199,.14);
    background-clip: padding-box;
 }
 
@@ -2412,21 +2415,23 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
    display: flex;
    align-items: center;
    justify-content: center;
-   background: rgba(255,255,255,.34);
+   /* 蓝白简约：未选=白底 hairline 描边 */
+   background: #fff;
    border: 0;
-   color: #7c8190;
+   color: #5f6b7d;
    font-family: var(--font-serif);
    font-size: 13PX;
    box-sizing: border-box;
-   box-shadow: inset 0 0 0 1PX rgba(95,149,199,.10);
+   box-shadow: inset 0 0 0 1PX rgba(95,149,199,.22);
    background-clip: padding-box;
 }
 
 .import-editor-type.on {
-   background: rgba(95,149,199,.56);
+   /* 选中=实心蓝（去玻璃高光） */
+   background: var(--blue-strong, #1f65b7);
    color: #fff;
    font-weight: 560;
-   box-shadow: inset 0 0 0 1PX rgba(95,149,199,.18), inset 0 1PX 0 rgba(255,255,255,.25);
+   box-shadow: none;
 }
 
 .import-editor-shapes {
@@ -2442,21 +2447,23 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
    align-items: center;
    justify-content: center;
    gap: 6PX;
-   background: rgba(255,255,255,.34);
+   /* 蓝白简约：未选=白底 hairline 描边 */
+   background: #fff;
    border: 0;
-   color: #7c8190;
+   color: #5f6b7d;
    font-family: var(--font-serif);
    font-size: 12PX;
    box-sizing: border-box;
-   box-shadow: inset 0 0 0 1PX rgba(95,149,199,.10);
+   box-shadow: inset 0 0 0 1PX rgba(95,149,199,.22);
    background-clip: padding-box;
 }
 
 .import-editor-shape.on {
-   background: rgba(95,149,199,.56);
+   /* 选中=实心蓝（去玻璃高光） */
+   background: var(--blue-strong, #1f65b7);
    color: #fff;
    font-weight: 560;
-   box-shadow: inset 0 0 0 1PX rgba(95,149,199,.18), inset 0 1PX 0 rgba(255,255,255,.25);
+   box-shadow: none;
 }
 
 .import-shape-icon {
@@ -2470,16 +2477,22 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
    border-radius: 999PX;
 }
 
+/* 悬浮在裁剪 stage 右下角的白胶囊：离图近但不遮裁剪预览 */
 .import-ai-btn {
+   position: absolute;
+   right: 8PX;
+   bottom: 8PX;
+   z-index: 5;
    display: flex;
    align-items: center;
    gap: 6PX;
-   padding: 10PX 14PX;
-   border-radius: 14PX;
-   background: rgba(31,101,183,.08);
+   padding: 8PX 14PX;
+   border-radius: 999PX;
+   background: #fff;
    color: var(--blue-strong);
    font-size: 13PX;
-   font-weight: 520;
+   font-weight: 560;
+   box-shadow: 0 3PX 10PX rgba(31,101,183,.14), inset 0 0 0 1PX rgba(95,149,199,.18);
 }
 .import-ai-icon {
    font-size: 14PX;
@@ -2498,9 +2511,9 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
    50% { opacity: 1; }
 }
 
-/* 识别完成：按钮转为「还原原图」的中性态 */
+/* 识别完成：白胶囊保持实心，文字/图标转中性灰表示「还原原图」 */
 .import-ai-btn.undo {
-   background: rgba(60, 64, 72, .07);
+   background: #fff;
    color: #5a5f68;
 }
 .import-ai-btn.undo .import-ai-icon {
@@ -2721,9 +2734,10 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
    justify-content: center;
    font-size: 14PX;
    font-weight: 620;
-   background: rgba(31,101,183,.12);
-   color: #1b5fae;
-   box-shadow: inset 0 0 0 1PX rgba(31,101,183,.20), inset 0 1PX 0 rgba(255,255,255,.44);
+   /* 蓝白简约：主操作实心蓝胶囊，白字，一眼可见（去玻璃底） */
+   background: var(--blue-strong, #1f65b7);
+   color: #fff;
+   box-shadow: 0 2PX 6PX rgba(31,101,183,.20);
 }
 .spu-body {
    flex: 1 1 auto;
@@ -2775,16 +2789,17 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
 .spu-card {
    min-width: 0;
    width: 100%;
-   height: 152PX;
+   /* 蓝白简约：自适应高度——2 行标题不再把分类/按钮顶掉或重叠 */
+   height: auto;
    display: flex;
    flex-direction: column;
    align-items: center;
-   gap: 3PX;
-   padding: 8PX 6PX;
+   gap: 4PX;
+   padding: 8PX 6PX 10PX;
    border-radius: 15PX;
-   /* 精修：分层玻璃底 + 顶部高光，卡片从「平面色块」变「有厚度的玻璃卡」 */
-   background: linear-gradient(180deg, rgba(255,255,255,.72), rgba(255,255,255,.46));
-   box-shadow: inset 0 0 0 1PX rgba(95,149,199,.16), inset 0 1PX 0 rgba(255,255,255,.7), 0 4PX 12PX rgba(31,101,183,.07);
+   /* 扁平白卡 + hairline 内环 + 软阴影（foundation --sh-card），去掉分层玻璃 */
+   background: #fff;
+   box-shadow: inset 0 0 0 1PX rgba(95,149,199,.14), 0 3PX 10PX rgba(31,101,183,.05);
    box-sizing: border-box;
    overflow: hidden;
 }
@@ -2796,10 +2811,10 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
    display: flex;
    align-items: center;
    justify-content: center;
-   /* 精修：给图一个柔和圆角框 + 微内环 + 浅径向底，透明底/产品图都读得干净 */
+   /* 干净的浅蓝底图框 + hairline（真实图片照常渲染，只是底色更干净） */
    border-radius: 12PX;
-   background: radial-gradient(120% 120% at 50% 25%, rgba(255,255,255,.9), rgba(233,244,255,.55));
-   box-shadow: inset 0 0 0 1PX rgba(95,149,199,.14);
+   background: #f2f7fc;
+   box-shadow: inset 0 0 0 1PX rgba(95,149,199,.12);
    overflow: hidden;
 }
 .spu-card-img {
@@ -2835,7 +2850,9 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
 .spu-card-title {
    width: 100%;
    max-width: 100%;
-   height: 34PX;
+   /* 自适应高度：最多两行，1 行时卡片自然变矮，不再固定 34PX 留空 */
+   min-height: 17PX;
+   margin-top: 2PX;
    font-size: 12PX;
    line-height: 17PX;
    font-weight: 520;
@@ -2871,10 +2888,10 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
    justify-content: center;
    font-size: 12PX;
    font-weight: 640;
-   /* 精修：主行动升为实心蓝胶囊，"导入"在满屏卡片里一眼可见 */
-   background: linear-gradient(180deg, #3f83cf, #1f65b7);
+   /* 蓝白简约：主行动实心蓝色块（去渐变/减重阴影），满屏卡片里一眼可见 */
+   background: var(--blue-strong, #1f65b7);
    color: #fff;
-   box-shadow: 0 2PX 6PX rgba(31,101,183,.28), inset 0 1PX 0 rgba(255,255,255,.35);
+   box-shadow: 0 2PX 6PX rgba(31,101,183,.20);
    box-sizing: border-box;
    overflow: hidden;
    white-space: nowrap;

@@ -46,6 +46,11 @@
             <view class="import-crop-resize" @touchstart.stop="$emit('handle-touch-start', $event, 'br')" @mousedown.stop="$emit('handle-mouse-down', $event, 'br')" />
           </view>
         </view>
+        <!-- 智能识别：悬浮在裁剪图右下角的白胶囊（离图近但不遮挡裁剪预览） -->
+        <view class="import-ai-btn" :class="{ loading: aiState === 'loading', undo: aiState === 'done' }" @tap="$emit('smart-recognition')">
+          <text class="import-ai-icon">{{ aiState === 'done' ? '↺' : '✦' }}</text>
+          <text>{{ aiState === 'loading' ? '识别中…' : aiState === 'done' ? '还原原图' : '智能识别' }}</text>
+        </view>
         <view v-if="devTools" style="position:absolute;left:4px;bottom:2px;z-index:9999;font-size:20rpx;color:#ff0;background:rgba(0,0,0,.55);padding:2rpx 6rpx">img {{ crop.imageW }}x{{ crop.imageH }} · stage {{ crop.stageW }}x{{ crop.stageH }} · max {{ crop.stageMaxW }}x{{ crop.stageMaxH }} · via {{ measureTag }} · sel {{ Math.round(crop.x) }},{{ Math.round(crop.y) }},{{ Math.round(crop.w) }},{{ Math.round(crop.h) }}</view>
       </view>
       <!-- bottom drawer: classification fields (tap the grabber to fold away) -->
@@ -89,12 +94,6 @@
                 <view class="import-shape-icon" :class="item.value" />
                 <text>{{ item.label }}</text>
               </view>
-            </view>
-          </view>
-          <view class="import-editor-field">
-            <view class="import-ai-btn" :class="{ loading: aiState === 'loading', undo: aiState === 'done' }" @tap="$emit('smart-recognition')">
-              <text class="import-ai-icon">{{ aiState === 'done' ? '↺' : '✦' }}</text>
-              <text>{{ aiState === 'loading' ? '识别中…' : aiState === 'done' ? '还原原图' : '智能识别' }}</text>
             </view>
           </view>
         </view>
