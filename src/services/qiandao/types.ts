@@ -82,6 +82,15 @@ export function bestSpuImage(spu: Pick<QiandaoSpuSummary, 'image' | 'transparent
   return spu.transparentImage || spu.image || ''
 }
 
+// 整盒/系列 SPU 判定：编辑器要的是「系列里的具体单品」（单个吧唧/立牌/卡…），
+// 不是整盒盲盒封面。实测 typeName 不可靠（整盒与单品大多同为「玩具/typeId 15」），
+// 名字含「系列/整盒/整箱/端盒」才是可靠的整盒标记。注意【不能】过滤「盲盒」——
+// 单品可能叫「XX盲盒徽章」（就是单个吧唧）。
+const SERIES_SPU_NAME_RE = /系列|整盒|整箱|端盒|一番赏/
+export function isSeriesSpu(spu: Pick<QiandaoSpuSummary, 'title'>): boolean {
+  return SERIES_SPU_NAME_RE.test(spu.title || '')
+}
+
 // SPU 类目名/标题 → 谷子二级分类（editor-core SUBCATS['谷子'] 的子集）。
 // 顺序即优先级：泛词「卡」放最后，避免「立卡/卡套」抢先命中。
 const SPU_SUB_RULES: Array<[string, RegExp]> = [

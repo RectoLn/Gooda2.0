@@ -327,7 +327,7 @@ import { cropImageFrame, normalizeCropRect, denormalizeCropRect } from './crop-m
 import { measureRect } from '../../platform/measure'
 import { imageSizeFromLocalFile, imageSourceToDataUrl, remoteImageToDataUrl, saveImageNativeSmart } from '../../platform/image-io'
 import { resolveQiandaoSpuService, QiandaoSpuServiceError } from '../../services/qiandao/client'
-import { bestSpuImage, inferGuziSubFromSpu } from '../../services/qiandao/types'
+import { bestSpuImage, inferGuziSubFromSpu, isSeriesSpu } from '../../services/qiandao/types'
 import type { QiandaoSpuSummary } from '../../services/qiandao/types'
 import appWaterBg from '../../assets/app-water-bg.jpg'
 
@@ -2646,9 +2646,25 @@ async function runSpuSearch(keyword?: string) {
   spuError.value = ''
   spuSearched.value = true
   try {
-    const result = await spuService.client.searchSpu({ keyword: kw, page: 1, pageSize: 24 })
+    // 抓满 Library 窗口（2 页×50=100，上游 offset+limit≤100）。第 1 页拿到即先展示，
+    // 第 2 页 best-effort 追加——一页失败不拖垮另一页。
+    const first = await spuService.client.searchSpu({ keyword: kw, page: 1, pageSize: 50 })
     if (seq !== spuSearchSeq) return
-    spuItems.value = result.items
+    let merged = first.items
+    if (first.items.length >= 50) {
+      try {
+        const second = await spuService.client.searchSpu({ keyword: kw, page: 2, pageSize: 50 })
+        if (seq !== spuSearchSeq) return
+        merged = merged.concat(second.items)
+      } catch (_) { /* 第二页失败保留第一页 */ }
+    }
+    // 去重（跨页可能重复）+ 滤掉整盒/系列，只留系列里的具体单品（吧唧/立牌/卡…）。
+    const seen = new Set<string>()
+    spuItems.value = merged.filter((it) => {
+      if (seen.has(it.id) || isSeriesSpu(it)) return false
+      seen.add(it.id)
+      return true
+    })
   } catch (err: any) {
     if (seq !== spuSearchSeq) return
     spuItems.value = []
