@@ -2486,6 +2486,27 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
    color: var(--blue-strong);
 }
 
+/* 识别中：按钮降透明 + 星标脉冲，同时挡掉重复点击的视觉暗示 */
+.import-ai-btn.loading {
+   opacity: .62;
+}
+.import-ai-btn.loading .import-ai-icon {
+   animation: gooda-ai-pulse 0.9s ease-in-out infinite;
+}
+@keyframes gooda-ai-pulse {
+   0%, 100% { opacity: .35; }
+   50% { opacity: 1; }
+}
+
+/* 识别完成：按钮转为「还原原图」的中性态 */
+.import-ai-btn.undo {
+   background: rgba(60, 64, 72, .07);
+   color: #5a5f68;
+}
+.import-ai-btn.undo .import-ai-icon {
+   color: #5a5f68;
+}
+
 .import-shape-icon.round {
    border-radius: 6PX;
 }

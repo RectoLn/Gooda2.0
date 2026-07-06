@@ -1,6 +1,7 @@
 const url = require('url')
 const { corsMiddleware } = require('../middleware/cors')
 const { handleSpuSearch, handleSpuDetail, handleSpuImage } = require('./spu')
+const { handleCutoutRemove, handleCutoutHealth } = require('./cutout')
 
 async function handleRequest(req, res) {
   if (corsMiddleware(req, res)) return
@@ -11,6 +12,9 @@ async function handleRequest(req, res) {
   if (req.method === 'GET' && pathname === '/spu/v1/search') return handleSpuSearch(req, res, query)
   if (req.method === 'GET' && pathname === '/spu/v1/detail') return handleSpuDetail(req, res, query)
   if (req.method === 'GET' && pathname === '/spu/v1/image') return handleSpuImage(req, res, query)
+
+  if (req.method === 'POST' && pathname === '/cutout/v1/remove') return handleCutoutRemove(req, res)
+  if (req.method === 'GET' && pathname === '/cutout/v1/health') return handleCutoutHealth(req, res, query)
 
   if (pathname === '/' || pathname === '/healthz') {
     res.writeHead(200, { 'Content-Type': 'application/json' })

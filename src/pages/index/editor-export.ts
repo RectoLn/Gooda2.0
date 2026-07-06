@@ -51,17 +51,19 @@ function selectCanvasNode(canvasId: string): Promise<any> {
 // Dimina 的 canvasToTempFilePath 用 canvas-id 定位 DOM canvas（忽略 canvas 参数），
 // 而 CanvasNode 内含 CanvasRenderingContext2DProxy（Map + Proxy），跨 worker
 // postMessage 结构化克隆时会抛 DataCloneError，直接导致导出失败。
-function canvasToTempFilePath(canvasId: string): Promise<string> {
+type SnapshotOptions = { width: number; height: number; fileType?: 'png' | 'jpg'; quality?: number }
+function canvasToTempFilePath(canvasId: string, opts: SnapshotOptions): Promise<string> {
   return new Promise((resolve, reject) => {
     Taro.canvasToTempFilePath({
       canvasId,
       x: 0,
       y: 0,
-      width: EXPORT_SIZE,
-      height: EXPORT_SIZE,
-      destWidth: EXPORT_SIZE,
-      destHeight: EXPORT_SIZE,
-      fileType: 'png',
+      width: opts.width,
+      height: opts.height,
+      destWidth: opts.width,
+      destHeight: opts.height,
+      fileType: opts.fileType || 'png',
+      quality: opts.quality,
       // Dimina 的 render 层通过 triggerCallback 以 args 数组回传结果，成功回调拿到的是
       // [result]（而 WeChat/H5 是 result 对象）。两种形态都兼容，避免 tempFilePath 取空。
       success: (r: any) => {
@@ -71,6 +73,37 @@ function canvasToTempFilePath(canvasId: string): Promise<string> {
       fail: (err: any) => reject(Array.isArray(err) ? err[0] : err),
     })
   })
+}
+
+// 智能识别的上传预压缩：把图片经导出画布重绘到 maxSide 内，转 JPEG data URL
+// （铺白底避免透明像素在 JPEG 里变黑）。任一环节失败返回 ''，调用方回退原图直传。
+export async function downscaleImageToDataUrl(
+  canvasId: string, src: string, srcW: number, srcH: number, maxSide: number,
+): Promise<string> {
+  try {
+    const node = await selectCanvasNode(canvasId)
+    if (!node || typeof node.getContext !== 'function') return ''
+    const scale = Math.min(1, maxSide / Math.max(srcW, srcH))
+    const w = Math.max(1, Math.round(srcW * scale))
+    const h = Math.max(1, Math.round(srcH * scale))
+    node.width = w
+    node.height = h
+    const ctx = node.getContext('2d')
+    if (!ctx) return ''
+    const img = await loadImg(node, src)
+    ctx.clearRect(0, 0, w, h)
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, w, h)
+    ctx.drawImage(img, 0, 0, w, h)
+    if (process.env.TARO_ENV === 'h5' && typeof node.toDataURL === 'function') {
+      return node.toDataURL('image/jpeg', 0.85)
+    }
+    await flushCanvas()
+    return await canvasToTempFilePath(canvasId, { width: w, height: h, fileType: 'jpg', quality: 0.85 })
+  } catch (err) {
+    console.warn('[gooda-cutout] downscale failed, fall back to original', err)
+    return ''
+  }
 }
 
 export async function exportEditorImage(options: ExportEditorImageOptions): Promise<ExportResult> {
@@ -185,7 +218,7 @@ export async function exportEditorImage(options: ExportEditorImageOptions): Prom
   // 原生（Dimina）：先让绘制指令 flush 到渲染层，再截图，避免时序竞态。
   await flushCanvas()
   try {
-    const tempFilePath = await canvasToTempFilePath(canvasId)
+    const tempFilePath = await canvasToTempFilePath(canvasId, { width: EXPORT_SIZE, height: EXPORT_SIZE, fileType: 'png' })
     if (!tempFilePath) {
       return { ok: false, stage: 'temp-file-empty', detail: 'canvasToTempFilePath 成功但未返回 tempFilePath' }
     }

@@ -5,5 +5,10 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
+  },
+  "dependencies": {
+    "onnxruntime-node": "^1.19.2",
+    "onnxruntime-web": "^1.22.0",
+    "sharp": "^0.33.5"
   }
 }

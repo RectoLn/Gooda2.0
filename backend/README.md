@@ -1,8 +1,36 @@
-# 谷搭 SPU 代理后端
+# 谷搭编辑器后端
 
-qdmp 平台约定的 Node.js 后端（runtime `nodejs22`，入口 `index.js`，监听 `:8080`，零依赖）。
-唯一职责：在服务端持有 appSecret 换取/刷新 access token，把编辑器的谷子（SPU）查询转发到
-千岛开放平台【对外 OpenAPI】。**不接内部接口（/treasure/* 等一律不碰）。**
+qdmp 平台约定的 Node.js 后端（runtime `nodejs22`，入口 `index.js`，监听 `:8080`）。两块职责：
+
+1. **SPU 代理**（零依赖）：在服务端持有 appSecret 换取/刷新 access token，把编辑器的谷子（SPU）
+   查询转发到千岛开放平台【对外 OpenAPI】。**不接内部接口（/treasure/* 等一律不碰）。**
+2. **抠图 /cutout**（onnxruntime-node + sharp）：导入页「智能识别」的自托管抠图推理，
+   模型与许可证见 `models-onnx/README.md`。**隐私**：用户照片只进本服务、内存中处理，
+   不落盘、不写日志、不外传任何第三方。
+
+## 抠图（/cutout/v1/*）
+
+| 路由 | 说明 |
+| ---- | ---- |
+| `POST /cutout/v1/remove` | body `{ image: base64（可带 data URL 前缀，≤10MB）}` → `data { image: 透明PNG base64, mime, width, height, bbox, metrics: { fillRatio, aspect }, model, durationMs }`。业务失败 200 + `code: NO_SUBJECT`；`BUSY`/`UNAVAILABLE` 503、`TIMEOUT` 504、`BAD_INPUT` 400/413 |
+| `GET /cutout/v1/health?warm=1` | 依赖/模型状态与推理统计；`warm=1` 触发主模型预加载（部署后先打一次） |
+
+实现要点：ISNet(int8, 1024²) 主模型，失败自动降级 u2netp(320²)；串行推理队列（防 OOM，
+排队上限 4）；连通域選主（面积×居中加权）+ 4% 留白 bbox 裁切；输出限 1280px。
+推理运行时两级：onnxruntime-node 原生（本机实测 1024² ~0.9s）→ **qdmp 线上容器是
+musl/Alpine 装不了 glibc 原生二进制，自动落 onnxruntime-web 纯 WASM**（health 的 `runtime`
+字段区分 native/wasm；`CUTOUT_FORCE_WASM=1` 可本地复现线上路径）。线上容器 ~1 vCPU 共享，
+实测 1024²@4线程 20s+ 必超时，wasm 默认自动压到 **512²@1线程（~3.5-5s，随邻居负载波动）**；
+`GET /cutout/v1/health?size=&threads=&warm=1` 可在线调参试验（重启后回默认）。
+
+**⚠️ package-lock.json 手术（勿被 npm install 复原）**：onnxruntime-node 的 postinstall
+只为下载 CUDA EP（CPU 二进制已内置），但它在 qdmp 流水线里访问外网失败会打挂 `npm ci`，
+且自动生成的 Dockerfile 无法带 .npmrc/环境变量跳过 → 已手动移除 lock 里 onnxruntime-node
+条目的 `"hasInstallScript": true`，npm ci 便不执行其脚本。**任何 `npm install` 都会把这个
+标记加回来**，发版前需确认（`grep -c hasInstallScript package-lock.json` 应为 1，即只剩 sharp）。
+环境变量：`CUTOUT_INPUT_SIZE`(默认1024，内存/耗时不达标可降 768/512)、`CUTOUT_THREADS`(默认4)、
+`CUTOUT_TIMEOUT_MS`(默认25000)。本机实测（M 系）：单张 ~0.9s；原生依赖装不上时 /cutout 返回
+503 但不影响 /spu/*。
 
 ## 对上游（openapi.qiandao.com，用法依据 qdmp api-guide / Library Swagger）
 

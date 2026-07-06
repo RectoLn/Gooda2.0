@@ -92,9 +92,9 @@
             </view>
           </view>
           <view class="import-editor-field">
-            <view class="import-ai-btn" @tap="$emit('smart-recognition')">
-              <text class="import-ai-icon">✦</text>
-              <text>智能识别</text>
+            <view class="import-ai-btn" :class="{ loading: aiState === 'loading', undo: aiState === 'done' }" @tap="$emit('smart-recognition')">
+              <text class="import-ai-icon">{{ aiState === 'done' ? '↺' : '✦' }}</text>
+              <text>{{ aiState === 'loading' ? '识别中…' : aiState === 'done' ? '还原原图' : '智能识别' }}</text>
             </view>
           </view>
         </view>
@@ -126,6 +126,7 @@ defineProps<{
   subcats: string[]
   shapeOptions: { label: string; value: Shape }[]
   drawerCollapsed: boolean
+  aiState: 'idle' | 'loading' | 'done'
   devTools: boolean
   measureTag: string
 }>()

@@ -273,6 +273,7 @@
       :subcats="importDraftSubcats"
       :shape-options="importShapeOptions"
       v-model:drawer-collapsed="importDrawerCollapsed"
+      :ai-state="importAiState"
       :dev-tools="devTools"
       :measure-tag="measureTag"
       @cancel="cancelImportEditor"
@@ -311,7 +312,8 @@ import ExportHistoryPanel from './components/ExportHistoryPanel.vue'
 import ExportPreview from './components/ExportPreview.vue'
 import ImportCropEditor from './components/ImportCropEditor.vue'
 import SpuSearchPanel from './components/SpuSearchPanel.vue'
-import { exportEditorImage } from './editor-export'
+import { exportEditorImage, downscaleImageToDataUrl } from './editor-export'
+import { removeImageBackground, CutoutServiceError, CUTOUT_REASON_TEXT } from '../../services/cutout/client'
 import {
   STORAGE_KEY, STORAGE_VERSION, EXPORT_SIZE, BAG_RATIO, BOARD_LAYER_ID, WIN, ROW_PITCH,
   boards, bags, cats, decor, SUBCATS,
@@ -1201,6 +1203,7 @@ onMounted(async () => {
   if (process.env.TARO_ENV === 'h5' && typeof window !== 'undefined') {
     ;(window as any).__gooda = {
       openImportEditor, cancelImportEditor, setImportDraftShape,
+      onSmartRecognition, importAiState, restoreSmartRecognition,
       importCrop, importDraft, addLayer, doc,
       importCropImageFrame,
       measureImageSize, imageSizeFromDataUrl, measureImportDraftImageSize,
@@ -2281,6 +2284,7 @@ async function createImportedAsset(src: string, options?: { type?: UserAsset['ty
   return asset
 }
 function resetImportDraft() {
+  resetImportAi()
   importDraft.src = ''
   importDraft.storedSrc = ''
   importDraft.editAssetId = ''
@@ -2311,6 +2315,7 @@ async function openImportEditor(
   // visual region → "货不对板". Convert to a data URL up front and use it for BOTH the
   // editor preview and storage, so the selection and the cut-out are pixel-identical.
   const displaySrc = await imageSourceToDataUrl(src)
+  resetImportAi()
   importDraft.src = displaySrc
   importDraft.storedSrc = displaySrc
   importDraft.editAssetId = ''
@@ -2343,6 +2348,7 @@ function seedImportCropFromExisting(crop: ImgCrop) {
 }
 async function openImportEditorFromAsset(asset: UserAsset) {
   importReady.value = false
+  resetImportAi()
   importDraft.src = asset.src
   importDraft.storedSrc = asset.src
   importDraft.editAssetId = asset.id
@@ -2409,8 +2415,110 @@ watch(importDrawerCollapsed, () => {
     clampImportCrop()
   })
 })
-function onSmartRecognition() {
-  Taro.showToast({ title: '智能识别仍在开发中', icon: 'none' })
+// ---- 智能识别（抠图）--------------------------------------------------------
+// 点击后把当前导入图上传到自有后端 /cutout（自托管开源模型），拿回按主体裁好的
+// 透明底 PNG 写回 importDraft，选区重置为全图 → "手动拖框"变成"一键确认"。
+// 失败只弹分级提示、原图原选区纹丝不动（完全回退手动裁剪）。
+const importAiState = ref<'idle' | 'loading' | 'done'>('idle')
+let importAiBackup: {
+  src: string; storedSrc: string; sourceW: number; sourceH: number
+  shape: Shape; sub: string; label: string
+  crop: { x: number; y: number; w: number; h: number }
+} | null = null
+
+function resetImportAi() {
+  importAiState.value = 'idle'
+  importAiBackup = null
+}
+
+async function onSmartRecognition() {
+  if (importAiState.value === 'loading') return
+  if (importAiState.value === 'done') { await restoreSmartRecognition(); return }
+  if (!importReady.value) return
+  const src = importDraft.src || importDraft.storedSrc
+  if (!src) return
+
+  importAiState.value = 'loading'
+  try {
+    // 1) 准备上传体：源图已统一为 data URL（openImportEditor 的 WYSIWYG 约定）。
+    //    大图先经导出画布压成 ≤1536px 的 JPEG 控制上传体积；压缩失败回退原图直传。
+    let payload = src
+    const srcW = importCrop.imageW || importDraft.sourceW
+    const srcH = importCrop.imageH || importDraft.sourceH
+    if (srcW && srcH && (Math.max(srcW, srcH) > 1600 || payload.length > 2_000_000)) {
+      let scaled = await downscaleImageToDataUrl('exportCanvas', src, srcW, srcH, 1536)
+      if (scaled && !scaled.startsWith('data:')) scaled = await imageSourceToDataUrl(scaled)
+      if (scaled.startsWith('data:')) payload = scaled
+    }
+    if (!payload.startsWith('data:')) payload = await imageSourceToDataUrl(payload)
+    if (!payload.startsWith('data:')) throw new CutoutServiceError(CUTOUT_REASON_TEXT['bad-input'], 'bad-input')
+
+    const result = await removeImageBackground(payload)
+
+    // 请求返回时编辑器可能已被关闭/换图（用户没等结果）→ 静默丢弃，绝不写回陈旧状态
+    if (!importEditorOpen.value || (importDraft.src !== src && importDraft.storedSrc !== src)) return
+
+    importAiBackup = {
+      src: importDraft.src,
+      storedSrc: importDraft.storedSrc,
+      sourceW: importDraft.sourceW,
+      sourceH: importDraft.sourceH,
+      shape: importDraft.shape,
+      sub: importDraft.sub,
+      label: importDraft.label,
+      crop: { x: importCrop.x, y: importCrop.y, w: importCrop.w, h: importCrop.h },
+    }
+    const pngUrl = `data:image/png;base64,${result.image}`
+    importReady.value = false
+    importDraft.src = pngUrl
+    importDraft.storedSrc = pngUrl
+    importDraft.sourceW = result.width
+    importDraft.sourceH = result.height
+    // 高置信度圆形主体（掩码与理想圆 IoU ≥ 0.9，实测圆吧唧 0.95 / 心形 0.85 / 立牌 0.32）
+    // → 自动切圆形选区 + 建议分类吧唧；其余保持 rect，靠透明底呈现自然轮廓。
+    if (importDraft.type === '谷子' && (result.metrics?.circleIoU ?? 0) >= 0.9 && importDraftSubcats.value.includes('吧唧')) {
+      importDraft.shape = 'circle'
+      setImportDraftSub('吧唧')
+    }
+    importCrop.imageW = 0
+    importCrop.imageH = 0
+    await refreshImportCropStage(false)
+    resetImportCropForShape(1) // 返回图已按主体裁好 → 选区盖满全图，一键即可导入
+    importAiState.value = 'done'
+    Taro.showToast({ title: '识别完成', icon: 'success' })
+  } catch (err: any) {
+    importAiState.value = 'idle'
+    const message = err instanceof CutoutServiceError ? err.message : CUTOUT_REASON_TEXT.server
+    console.warn('[gooda-cutout] recognition failed', err)
+    Taro.showToast({ title: message, icon: 'none', duration: 2600 })
+  } finally {
+    if (importAiState.value !== 'loading' && !importReady.value && importEditorOpen.value) importReady.value = true
+    if (importAiState.value === 'loading') importAiState.value = 'idle'
+  }
+}
+
+// 「还原原图」：一键退回识别前的图与选区（同一张源图 → frame 不变，选区可精确还原）
+async function restoreSmartRecognition() {
+  const b = importAiBackup
+  if (!b) { importAiState.value = 'idle'; return }
+  importReady.value = false
+  importDraft.src = b.src
+  importDraft.storedSrc = b.storedSrc
+  importDraft.sourceW = b.sourceW
+  importDraft.sourceH = b.sourceH
+  importDraft.shape = b.shape
+  importDraft.sub = b.sub
+  importDraft.label = b.label
+  importCrop.imageW = 0
+  importCrop.imageH = 0
+  await refreshImportCropStage(false)
+  importCrop.x = b.crop.x
+  importCrop.y = b.crop.y
+  importCrop.w = b.crop.w
+  importCrop.h = b.crop.h
+  clampImportCrop()
+  resetImportAi()
+  importReady.value = true
 }
 // After importing/saving, make sure the shelf shows the asset's category — otherwise
 // a mismatched subcategory filter hides the new asset and the import looks like it failed.

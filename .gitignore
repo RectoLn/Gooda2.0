@@ -1,5 +1,8 @@
 dist/
 deploy_versions/
+# 抠图模型二进制不入 git（来源与校验和见 backend/models-onnx/README.md，部署时随 zip 上传）
+backend/models-onnx/*.onnx
+backend/models-onnx/*.onnx.part-*
 .temp/
 .rn_temp/
 node_modules/
