@@ -2440,18 +2440,20 @@ async function onSmartRecognition() {
 
   importAiState.value = 'loading'
   try {
-    // 1) 准备上传体：源图已统一为 data URL（openImportEditor 的 WYSIWYG 约定）。
-    //    大图先经导出画布压成 ≤1536px 的 JPEG 控制上传体积；压缩失败回退原图直传。
-    let payload = src
-    const srcW = importCrop.imageW || importDraft.sourceW
-    const srcH = importCrop.imageH || importDraft.sourceH
-    if (srcW && srcH && (Math.max(srcW, srcH) > 1600 || payload.length > 2_000_000)) {
-      let scaled = await downscaleImageToDataUrl('exportCanvas', src, srcW, srcH, 1536)
-      if (scaled && !scaled.startsWith('data:')) scaled = await imageSourceToDataUrl(scaled)
-      if (scaled.startsWith('data:')) payload = scaled
+    // 1) 准备上传体（→ data URL）。真机上相册图可能是 difile:// 路径而非 data URL
+    //    （openImportEditor 的转换在 Dimina 无 fetch/FileReader 时可能回退成原路径），
+    //    所以【主路径用导出画布重绘】：canvas.drawImage 对 difile/临时源是可靠的（导出/
+    //    存相册已验证），顺带压到 ≤1536px 控体积；失败再退 readFile base64；都失败才报错。
+    const srcW = importCrop.imageW || importDraft.sourceW || 0
+    const srcH = importCrop.imageH || importDraft.sourceH || 0
+    let payload = ''
+    if (srcW && srcH) {
+      const scaled = await downscaleImageToDataUrl('exportCanvas', src, srcW, srcH, 1536)
+      if (scaled) payload = scaled.startsWith('data:') ? scaled : await imageSourceToDataUrl(scaled)
     }
-    if (!payload.startsWith('data:')) payload = await imageSourceToDataUrl(payload)
-    if (!payload.startsWith('data:')) throw new CutoutServiceError(CUTOUT_REASON_TEXT['bad-input'], 'bad-input')
+    // canvas 路径拿不到（无尺寸/画布不可用）时退回：已是 data URL 直接用，否则读文件转
+    if (!payload.startsWith('data:')) payload = src.startsWith('data:') ? src : await imageSourceToDataUrl(src)
+    if (!payload.startsWith('data:')) throw new CutoutServiceError('图片处理失败，请重新导入后再试', 'bad-input')
 
     const result = await removeImageBackground(payload)
 

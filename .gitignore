@@ -10,5 +10,7 @@ node_modules/
 .swc
 *.local
 .env
+# 后端部署凭证：含 appSecret，随部署 zip 上传但绝不入 git
+backend/qdmp.json
 .cloudbase/
 .husky/
