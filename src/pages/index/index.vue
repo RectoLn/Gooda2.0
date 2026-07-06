@@ -2438,19 +2438,21 @@ async function onSmartRecognition() {
 
   importAiState.value = 'loading'
   try {
-    // 1) 准备上传体（→ data URL）。真机上相册图可能是 difile:// 路径而非 data URL
-    //    （openImportEditor 的转换在 Dimina 无 fetch/FileReader 时可能回退成原路径），
-    //    所以【主路径用导出画布重绘】：canvas.drawImage 对 difile/临时源是可靠的（导出/
-    //    存相册已验证），顺带压到 ≤1536px 控体积；失败再退 readFile base64；都失败才报错。
-    const srcW = importCrop.imageW || importDraft.sourceW || 0
-    const srcH = importCrop.imageH || importDraft.sourceH || 0
-    let payload = ''
-    if (srcW && srcH) {
-      const scaled = await downscaleImageToDataUrl('exportCanvas', src, srcW, srcH, 1536)
-      if (scaled) payload = scaled.startsWith('data:') ? scaled : await imageSourceToDataUrl(scaled)
+    // 准备上传体（→ data URL）。importDraft.src 在 openImportEditor 已被 imageSourceToDataUrl
+    // 转成 data URL（用户能在裁剪台看到图 = 这个源是有效可解码的），所以【直接发它】。
+    // 曾经先用 exportCanvas 重绘降采样：在 Dimina 上会产出【白图】→ 后端方差保护判为
+    // "画面过于单一"→ 无论什么图都报无主体。故彻底去掉画布这步；后端自身会把大图缩到
+    // 1536² 工作尺寸再推理，全尺寸原图直传即可（体积在后端上限内）。
+    // 仅当源意外不是 data URL（difile/临时路径，转换失败）才走 readFile / 画布兜底。
+    let payload = src.startsWith('data:') ? src : await imageSourceToDataUrl(src)
+    if (!payload.startsWith('data:')) {
+      const srcW = importCrop.imageW || importDraft.sourceW || 0
+      const srcH = importCrop.imageH || importDraft.sourceH || 0
+      if (srcW && srcH) {
+        const scaled = await downscaleImageToDataUrl('exportCanvas', src, srcW, srcH, 1536)
+        if (scaled && scaled.startsWith('data:')) payload = scaled
+      }
     }
-    // canvas 路径拿不到（无尺寸/画布不可用）时退回：已是 data URL 直接用，否则读文件转
-    if (!payload.startsWith('data:')) payload = src.startsWith('data:') ? src : await imageSourceToDataUrl(src)
     if (!payload.startsWith('data:')) throw new CutoutServiceError('图片处理失败，请重新导入后再试', 'bad-input')
 
     const result = await removeImageBackground(payload)

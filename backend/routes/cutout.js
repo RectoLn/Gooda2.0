@@ -3,9 +3,11 @@
 // 服务性失败（busy/unavailable/timeout）用 5xx，前端按 kind 分级提示并回退手动裁剪。
 const { removeBackground, healthInfo, setTuning, CutoutError } = require('../services/cutout')
 
-// base64 膨胀 ~4/3：15MB 请求体 ≈ 11MB 原图，覆盖手机原图直传的兜底场景
-const BODY_LIMIT = 15 * 1024 * 1024
-const IMAGE_LIMIT = 10 * 1024 * 1024
+// 前端现在直传全尺寸原图（不再客户端降采样，见 index.vue onSmartRecognition），
+// 后端自身缩到 1536² 工作尺寸再推理。放宽上限覆盖大多数手机原图：
+// base64 膨胀 ~4/3，24MB 请求体 ≈ 18MB 原图（12MP JPEG 通常 3-8MB，绰绰有余）。
+const BODY_LIMIT = 24 * 1024 * 1024
+const IMAGE_LIMIT = 18 * 1024 * 1024
 
 function sendJson(res, status, obj) {
   res.writeHead(status, { 'Content-Type': 'application/json' })
