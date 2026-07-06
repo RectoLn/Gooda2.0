@@ -9,12 +9,14 @@
         演示数据 · 资料库服务未配置（联调时设置 TARO_APP_SPU_PROXY_BASE）
       </view>
       <view class="spu-search-row">
+        <!-- 非受控输入：不要把 keyword 反绑到 :value。受控回写会在拼音输入法组合
+             过程中被框架每次按键重置原生 input，导致失焦/选字后无法继续输入。
+             面板 v-if 每次打开都重挂载 → 输入框天然清空；关键词经 @input 收集用于搜索。 -->
         <input
           class="spu-input"
           type="text"
           confirm-type="search"
           placeholder="搜索 IP / 角色 / 谷子名"
-          :value="keyword"
           @input="$emit('keyword-input', $event)"
           @confirm="$emit('search')"
         />

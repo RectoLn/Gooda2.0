@@ -13,8 +13,16 @@
       @export="exportImage"
     />
 
-    <!-- 满态遮罩：抽屉外变暗；点按回退到 open。位于痛包/工具栏之上、素材面板之下。 -->
-    <view class="shelf-backdrop" :class="{ show: isTall }" @tap="collapseShelf" />
+    <!-- 满态外区域捕获层：点按或向下滑动回退到 open。位于痛包/工具栏之上、素材面板之下。 -->
+    <view
+      class="shelf-backdrop"
+      :class="{ show: isTall }"
+      @touchstart="onBackdropTouchStart"
+      @touchmove="onBackdropTouchMove"
+      @touchend="onBackdropTouchEnd"
+      @touchcancel="onBackdropTouchEnd"
+      @mousedown="onBackdropMouseDown"
+    />
 
     <view
       class="stage-wrap"
@@ -1350,6 +1358,34 @@ function onStageWrapMouseDown(e: any) {
     (ev) => endStageSwipe(ev.clientX, ev.clientY),
   )
 }
+// 满态下，痛包/工具栏所在的上方区域被 .shelf-backdrop 覆盖（拦住手势），
+// 所以下滑手势要在这里接：向下滑 或 点按 → 回退到 open（满→开）。向上滑忽略。
+let backdropSwipe = { sy: 0, moved: false }
+function startBackdropSwipe(y: number) { backdropSwipe = { sy: y, moved: false } }
+function moveBackdropSwipe(y: number) { if (Math.abs(y - backdropSwipe.sy) > 8) backdropSwipe.moved = true }
+function endBackdropSwipe(y: number) {
+  const dy = y - backdropSwipe.sy
+  if (!backdropSwipe.moved || dy > 0) collapseShelf()
+}
+function onBackdropTouchStart(e: any) {
+  const t = e.touches && e.touches[0]
+  if (t) startBackdropSwipe(t.clientY)
+}
+function onBackdropTouchMove(e: any) {
+  const t = e.touches && e.touches[0]
+  if (t) moveBackdropSwipe(t.clientY)
+}
+function onBackdropTouchEnd(e: any) {
+  const t = (e.changedTouches && e.changedTouches[0]) || (e.touches && e.touches[0])
+  if (t) endBackdropSwipe(t.clientY)
+}
+function onBackdropMouseDown(e: any) {
+  startBackdropSwipe(e.clientY)
+  bindWindowMouseDrag(
+    (ev) => moveBackdropSwipe(ev.clientY),
+    (ev) => endBackdropSwipe(ev.clientY),
+  )
+}
 function selectLayer(id: string) { selectedId.value = id; markLayer() }
 function toggleLayerDrawer() { showLayerDrawer.value = !showLayerDrawer.value }
 function onLayerButtonTap() {
@@ -2474,6 +2510,8 @@ let spuSearchSeq = 0
 
 function openSpuSearch() {
   spuSearchOpen.value = true
+  // 面板重挂载后输入框为空，同步清掉搜索关键词，避免"空框但用旧词搜索"。
+  spuKeyword.value = ''
   // 未配置后端代理时开门见山：面板直接进入可理解的失败态，而不是搜索后才报错
   if (spuService.mode === 'unconfigured' && !spuSearched.value && !spuError.value) {
     spuError.value = 'SPU 资料库服务未配置：需要 Gooda 后端代理转发官方 OpenAPI（/spu/v1/search、/spu/v1/detail）'
