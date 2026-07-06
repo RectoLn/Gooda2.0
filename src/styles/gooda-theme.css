@@ -807,18 +807,16 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
    pointer-events: auto;
 }
 
-/* ---- 满态(tall)：痛包缩到上方，抽屉外变暗，微调栏与工具栏隐藏 ---- */
+/* ---- 满态(tall)：痛包缩到上方，微调栏与工具栏隐藏 ---- */
+/* 透明的点按捕获层：不再变暗，仅用于"点抽屉外区域回退到 open"。 */
 .shelf-backdrop {
    position: fixed;
    inset: 0;
    z-index: 950;
-   background: rgba(15,23,42,.40);
-   opacity: 0;
+   background: transparent;
    pointer-events: none;
-   transition: opacity .3s ease;
 }
 .shelf-backdrop.show {
-   opacity: 1;
    pointer-events: auto;
 }
 /* 痛包缩小并上移到顶部区域，给更长的素材抽屉让位 */

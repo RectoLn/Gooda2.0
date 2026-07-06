@@ -366,9 +366,9 @@ const nativeChromeReserve = process.env.TARO_ENV === 'h5' ? 0 : 84
 const pageH = Math.max(sys.screenHeight || 0, (sys.windowHeight || vp.h || 760) + nativeChromeReserve)
 const cw = Math.min(vp.w - 8, Math.floor((vp.h - 300) * 0.84), 430)
 const ch = Math.round(cw * BAG_RATIO)
-// 满态抽屉高度：屏高的 ~64%，并夹在 [420, 屏高-150] 之间，确保比 open(300) 高、
+// 满态抽屉高度：屏高的 ~72%，并夹在 [420, 屏高-120] 之间，确保比 open(300) 高、
 // 又给上方缩小后的痛包留出空间。面板始终以该高度绝对定位，靠 translateY 控制露出。
-const SHEET_TALL_H = Math.round(Math.min(Math.max((vp.h || 760) * 0.64, 420), (vp.h || 760) - 150))
+const SHEET_TALL_H = Math.round(Math.min(Math.max((vp.h || 760) * 0.72, 420), (vp.h || 760) - 120))
 const win = reactive({
   x: WIN.l * cw, y: WIN.t * ch,
   w: (WIN.r - WIN.l) * cw, h: (WIN.b - WIN.t) * ch,
