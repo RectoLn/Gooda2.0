@@ -1,0 +1,68 @@
+<!-- @dsCard group="Components" name="SPU 卡片" subtitle="现状 vs 精修 · 默认/已入池/无图/透明图/导入中" -->
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SPU 卡片</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,"SF Pro Display","Segoe UI",sans-serif;
+    background:linear-gradient(180deg,#eef7ff,#dbeaf8);padding:18px;color:#183d70}
+  .frame{max-width:390px;margin:0 auto}
+  h3{font-family:"Songti SC","STSong",serif;font-size:14px;font-weight:640;margin:16px 2px 8px;color:#17324f}
+  .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));column-gap:8px;row-gap:10px}
+
+  /* ---------- 现状 ---------- */
+  .cur .spu-card{height:152px;display:flex;flex-direction:column;align-items:center;gap:3px;
+    padding:8px 6px;border-radius:14px;background:rgba(255,255,255,.5);
+    box-shadow:inset 0 0 0 1px rgba(95,149,199,.12),0 3px 10px rgba(31,101,183,.05);overflow:hidden}
+  .cur .img{position:relative;width:70px;height:70px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+  .cur .img img{width:100%;height:100%;object-fit:contain}
+  .cur .noimg{width:100%;height:100%;display:flex;align-items:center;justify-content:center;border-radius:10px;background:rgba(95,149,199,.1);font-size:11px;color:rgba(60,60,67,.4)}
+  .cur .badge{position:absolute;right:-2px;top:-2px;font-size:9px;line-height:14px;padding:0 5px;border-radius:999px;background:rgba(52,148,110,.16);color:#2c7a58}
+  .cur .title{width:100%;height:34px;font-size:12px;line-height:17px;color:#1d1d1f;text-align:center;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-all}
+  .cur .type{width:100%;height:14px;font-size:10px;line-height:14px;color:rgba(60,60,67,.45);text-align:center;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+  .cur .btn{margin-top:2px;width:62px;height:26px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:620;background:rgba(31,101,183,.12);color:#1b5fae;box-shadow:inset 0 0 0 1px rgba(31,101,183,.2)}
+  .cur .btn.owned{background:rgba(255,255,255,.35);color:rgba(60,60,67,.5);box-shadow:inset 0 0 0 1px rgba(95,149,199,.14)}
+
+  /* ---------- 精修 ---------- */
+  .ref .spu-card{height:158px;display:flex;flex-direction:column;align-items:center;gap:4px;
+    padding:9px 7px;border-radius:15px;
+    background:linear-gradient(180deg,rgba(255,255,255,.72),rgba(255,255,255,.46));
+    box-shadow:inset 0 0 0 1px rgba(95,149,199,.16),inset 0 1px 0 rgba(255,255,255,.7),0 4px 12px rgba(31,101,183,.07);overflow:hidden}
+  .ref .img{position:relative;width:76px;height:76px;display:flex;align-items:center;justify-content:center;border-radius:12px;
+    background:radial-gradient(120% 120% at 50% 25%,rgba(255,255,255,.9),rgba(233,244,255,.55));
+    box-shadow:inset 0 0 0 1px rgba(95,149,199,.14);overflow:hidden}
+  .ref .img img{width:88%;height:88%;object-fit:contain}
+  .ref .noimg{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:11px;color:rgba(60,60,67,.38)}
+  .ref .badge{position:absolute;right:3px;top:3px;font-size:8px;line-height:13px;padding:0 6px;border-radius:999px;
+    background:rgba(52,148,110,.92);color:#fff;font-weight:600;box-shadow:0 1px 3px rgba(44,122,88,.35);display:flex;align-items:center;gap:3px}
+  .ref .badge::before{content:"";width:3px;height:3px;border-radius:50%;background:#fff;opacity:.85}
+  .ref .title{width:100%;height:33px;font-size:12px;line-height:16.5px;font-weight:520;color:#17324f;text-align:center;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-all}
+  .ref .type{width:100%;height:13px;font-size:10px;line-height:13px;color:rgba(60,60,67,.42);text-align:center;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+  .ref .btn{margin-top:1px;width:66px;height:27px;border-radius:999px;display:flex;align-items:center;justify-content:center;gap:3px;font-size:12px;font-weight:640;
+    color:#fff;background:linear-gradient(180deg,#3f83cf,#1f65b7);box-shadow:0 2px 6px rgba(31,101,183,.28),inset 0 1px 0 rgba(255,255,255,.35)}
+  .ref .btn.owned{color:#2c7a58;background:rgba(52,148,110,.12);box-shadow:inset 0 0 0 1px rgba(52,148,110,.28)}
+  .ref .btn.busy{opacity:.65}
+  .ref .btn.owned::before{content:"✓";font-size:11px}
+</style>
+</head>
+<body>
+<div class="frame">
+  <h3>现状</h3>
+  <div class="grid cur">
+    <div class="spu-card"><div class="img"><span class="badge">透明图</span><img src="https://treasure.qiandaocdn.com/treasure/images/044a3764d23ac0d0e79f89cd61cd7a82.JPG?imginfo=w766,h761"></div><div class="title">星之所向吧唧</div><div class="type">玩具</div><div class="btn">导入</div></div>
+    <div class="spu-card"><div class="img"><img src="https://treasure.qiandaocdn.com/treasure/images/d3291187c3ef672ac2dd0378c9a02644.JPG?imginfo=w1080,h1080"></div><div class="title">心光印彩吧唧</div><div class="type">玩具</div><div class="btn owned">已在谷子池</div></div>
+    <div class="spu-card"><div class="img"><div class="noimg">无图</div></div><div class="title">寂静撞击方形徽章</div><div class="type">玩具</div><div class="btn">导入</div></div>
+  </div>
+
+  <h3>精修（更清晰的图框 / 分层 / 主行动按钮）</h3>
+  <div class="grid ref">
+    <div class="spu-card"><div class="img"><span class="badge">透明图</span><img src="https://treasure.qiandaocdn.com/treasure/images/044a3764d23ac0d0e79f89cd61cd7a82.JPG?imginfo=w766,h761"></div><div class="title">星之所向吧唧</div><div class="type">玩具</div><div class="btn">导入</div></div>
+    <div class="spu-card"><div class="img"><img src="https://treasure.qiandaocdn.com/treasure/images/d3291187c3ef672ac2dd0378c9a02644.JPG?imginfo=w1080,h1080"></div><div class="title">心光印彩吧唧</div><div class="type">玩具</div><div class="btn owned">已入池</div></div>
+    <div class="spu-card"><div class="img"><div class="noimg">无图</div></div><div class="title">寂静撞击方形徽章</div><div class="type">玩具</div><div class="btn busy">导入中…</div></div>
+  </div>
+</div>
+</body>
+</html>

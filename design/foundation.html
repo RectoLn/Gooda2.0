@@ -1,0 +1,72 @@
+<!-- @dsCard group="Foundation" name="设计 Tokens" subtitle="配色 / 字阶 / 圆角 / 阴影 / 间距" -->
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gooda 设计 Tokens</title>
+<style>
+  :root{
+    --blue-strong:#1f65b7; --blue-soft:#5f95c7; --blue-bg:#eef7ff;
+    --text-strong:#183d70; --text-primary:#1d1d1f; --text-muted:rgba(60,60,67,.55);
+    --glass-panel:rgba(255,255,255,.5); --glass-border:rgba(95,149,199,.14);
+    --serif:"Songti SC","STSong","Noto Serif CJK SC",serif;
+    --r-card:14px; --r-pill:11px; --r-round:999px;
+    --sh-card:0 3px 10px rgba(31,101,183,.05); --sh-panel:0 -10px 30px rgba(31,101,183,.16);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,"SF Pro Display","Segoe UI",sans-serif;
+    background:linear-gradient(180deg,#eef7ff,#dbeaf8);color:var(--text-strong);padding:20px}
+  h2{font-family:var(--serif);font-size:15px;font-weight:640;margin:22px 0 10px}
+  .row{display:flex;flex-wrap:wrap;gap:10px}
+  .sw{width:96px;border-radius:12px;overflow:hidden;background:#fff;box-shadow:var(--sh-card)}
+  .sw .chip{height:52px} .sw .lab{padding:6px 8px;font-size:10px;line-height:14px;color:var(--text-muted)}
+  .sw .lab b{display:block;color:var(--text-strong);font-size:11px}
+  .type div{margin:4px 0;color:var(--text-primary)}
+  .t-serif-title{font-family:var(--serif);font-size:17px;font-weight:640;color:#17324f}
+  .t-body{font-size:14px} .t-cap{font-size:12px;color:var(--text-muted)} .t-micro{font-size:10px;color:var(--text-muted)}
+  .radii{display:flex;gap:12px;align-items:flex-end}
+  .radii div{width:56px;height:56px;background:rgba(31,101,183,.12);box-shadow:inset 0 0 0 1px var(--glass-border)}
+  .shadows{display:flex;gap:16px} .shadows div{width:96px;height:56px;border-radius:14px;background:#fff}
+  .space{display:flex;gap:0;align-items:center} .space i{background:#1f65b7;height:12px;display:inline-block;margin-right:8px;border-radius:2px}
+</style>
+</head>
+<body>
+  <div class="t-serif-title" style="font-size:20px">Gooda 水蓝玻璃设计系统</div>
+  <div class="t-cap">Taro4+Vue3 → 千岛/Dimina · 单位真机为 rpx/PX</div>
+
+  <h2>配色</h2>
+  <div class="row">
+    <div class="sw"><div class="chip" style="background:#1f65b7"></div><div class="lab"><b>blue-strong</b>#1f65b7</div></div>
+    <div class="sw"><div class="chip" style="background:#5f95c7"></div><div class="lab"><b>blue-soft</b>#5f95c7</div></div>
+    <div class="sw"><div class="chip" style="background:#eef7ff"></div><div class="lab"><b>blue-bg</b>#eef7ff</div></div>
+    <div class="sw"><div class="chip" style="background:#183d70"></div><div class="lab"><b>text-strong</b>#183d70</div></div>
+    <div class="sw"><div class="chip" style="background:rgba(31,101,183,.12)"></div><div class="lab"><b>action-fill</b>12% blue</div></div>
+    <div class="sw"><div class="chip" style="background:rgba(52,148,110,.16)"></div><div class="lab"><b>badge-green</b>透明图</div></div>
+  </div>
+
+  <h2>字阶</h2>
+  <div class="type">
+    <div class="t-serif-title">宋体标题 17 / 640 — 千岛资料库</div>
+    <div class="t-body">正文 14 — 搜索 IP / 角色 / 谷子名</div>
+    <div class="t-cap">说明 12 — 卡片标题两行截断</div>
+    <div class="t-micro">微文 10 — 类目 / 徽标</div>
+  </div>
+
+  <h2>圆角</h2>
+  <div class="radii">
+    <div style="border-radius:9px"></div><div style="border-radius:11px"></div>
+    <div style="border-radius:14px"></div><div style="border-radius:22px"></div>
+  </div>
+
+  <h2>阴影</h2>
+  <div class="shadows">
+    <div style="box-shadow:0 3px 10px rgba(31,101,183,.05)"></div>
+    <div style="box-shadow:0 7px 17px rgba(31,101,183,.045)"></div>
+    <div style="box-shadow:0 -10px 30px rgba(31,101,183,.16)"></div>
+  </div>
+
+  <h2>间距刻度（PX）</h2>
+  <div class="space"><i style="width:4px"></i><i style="width:6px"></i><i style="width:8px"></i><i style="width:10px"></i><i style="width:14px"></i><i style="width:16px"></i><i style="width:22px"></i></div>
+</body>
+</html>

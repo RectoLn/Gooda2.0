@@ -2781,9 +2781,10 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
    align-items: center;
    gap: 3PX;
    padding: 8PX 6PX;
-   border-radius: 14PX;
-   background: rgba(255,255,255,.5);
-   box-shadow: inset 0 0 0 1PX rgba(95,149,199,.12), 0 3PX 10PX rgba(31,101,183,.05);
+   border-radius: 15PX;
+   /* 精修：分层玻璃底 + 顶部高光，卡片从「平面色块」变「有厚度的玻璃卡」 */
+   background: linear-gradient(180deg, rgba(255,255,255,.72), rgba(255,255,255,.46));
+   box-shadow: inset 0 0 0 1PX rgba(95,149,199,.16), inset 0 1PX 0 rgba(255,255,255,.7), 0 4PX 12PX rgba(31,101,183,.07);
    box-sizing: border-box;
    overflow: hidden;
 }
@@ -2795,11 +2796,15 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
    display: flex;
    align-items: center;
    justify-content: center;
+   /* 精修：给图一个柔和圆角框 + 微内环 + 浅径向底，透明底/产品图都读得干净 */
+   border-radius: 12PX;
+   background: radial-gradient(120% 120% at 50% 25%, rgba(255,255,255,.9), rgba(233,244,255,.55));
+   box-shadow: inset 0 0 0 1PX rgba(95,149,199,.14);
    overflow: hidden;
 }
 .spu-card-img {
-   width: 100%;
-   height: 100%;
+   width: 88%;
+   height: 88%;
    display: block;
 }
 .spu-card-noimg {
@@ -2815,14 +2820,17 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
 }
 .spu-card-badge {
    position: absolute;
-   right: -2PX;
-   top: -2PX;
-   font-size: 9PX;
-   line-height: 14PX;
-   padding: 0 5PX;
+   right: 3PX;
+   top: 3PX;
+   font-size: 8PX;
+   line-height: 13PX;
+   padding: 0 6PX;
    border-radius: 999PX;
-   background: rgba(52,148,110,.16);
-   color: #2c7a58;
+   /* 精修：从淡绿描边升为实心绿标签，"透明图"这个卖点更醒目 */
+   background: rgba(52,148,110,.92);
+   color: #fff;
+   font-weight: 600;
+   box-shadow: 0 1PX 3PX rgba(44,122,88,.35);
 }
 .spu-card-title {
    width: 100%;
@@ -2830,7 +2838,8 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
    height: 34PX;
    font-size: 12PX;
    line-height: 17PX;
-   color: #1d1d1f;
+   font-weight: 520;
+   color: #17324f;
    overflow: hidden;
    display: -webkit-box;
    -webkit-line-clamp: 2;
@@ -2851,28 +2860,35 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
 }
 .spu-card-import {
    margin-top: 2PX;
-   width: 62PX;
+   width: 66PX;
    max-width: 100%;
    height: 26PX;
    padding: 0 10PX;
    flex: 0 0 26PX;
-   border-radius: 9PX;
+   border-radius: 999PX;
    display: flex;
    align-items: center;
    justify-content: center;
    font-size: 12PX;
-   font-weight: 620;
-   background: rgba(31,101,183,.12);
-   color: #1b5fae;
-   box-shadow: inset 0 0 0 1PX rgba(31,101,183,.20);
+   font-weight: 640;
+   /* 精修：主行动升为实心蓝胶囊，"导入"在满屏卡片里一眼可见 */
+   background: linear-gradient(180deg, #3f83cf, #1f65b7);
+   color: #fff;
+   box-shadow: 0 2PX 6PX rgba(31,101,183,.28), inset 0 1PX 0 rgba(255,255,255,.35);
    box-sizing: border-box;
    overflow: hidden;
    white-space: nowrap;
 }
+/* 已入池：中性绿态 + ✓，和「可导入」的蓝拉开区分，避免误点 */
 .spu-card-import.owned {
-   background: rgba(255,255,255,.35);
-   color: rgba(60,60,67,.5);
-   box-shadow: inset 0 0 0 1PX rgba(95,149,199,.14);
+   background: rgba(52,148,110,.12);
+   color: #2c7a58;
+   box-shadow: inset 0 0 0 1PX rgba(52,148,110,.28);
+}
+.spu-card-import.owned::before {
+   content: "✓";
+   font-size: 11PX;
+   margin-right: 3PX;
 }
 .spu-card-import.busy {
    opacity: .6;

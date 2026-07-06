@@ -56,7 +56,7 @@
               class="spu-card-import"
               :class="{ owned: ownedIds.includes(it.id), busy: importingId === it.id }"
               @tap="$emit('import-item', it)"
-            >{{ importingId === it.id ? '导入中…' : ownedIds.includes(it.id) ? '已在谷子池' : '导入' }}</view>
+            >{{ importingId === it.id ? '导入中…' : ownedIds.includes(it.id) ? '已入池' : '导入' }}</view>
           </view>
         </view>
       </view>
