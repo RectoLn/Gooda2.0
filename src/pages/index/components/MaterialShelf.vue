@@ -169,6 +169,8 @@ const props = defineProps<{
   subCats: string[]
   subCat: string
   rowItems: RowItem[]
+  viewportH: number
+  shelfState: string
 }>()
 
 const emit = defineEmits<{
@@ -236,17 +238,25 @@ function measureScrollBounds(tries = 0) {
       .select('.grid-inner').boundingClientRect()
       .selectAll('.cell-card').boundingClientRect()
       .exec((res: any) => {
-        const vh = (res && res[0] && res[0].height) || 0
+        const rect = res && res[0]
+        const gridH = (rect && rect.height) || 0
+        const gridTop = (rect && rect.top) || 0
         const ch = (res && res[1] && res[1].height) || 0
         const cells = (res && res[2] && res[2].length) || 0
         // The render thread updates a beat after the list changes; a stale read
         // still returns non-zero heights, so retry until the rendered cell count
         // matches the current list (i.e. the new category has actually laid out).
-        if ((cells !== props.rowItems.length || !vh || !ch) && tries < 10) {
+        if ((cells !== props.rowItems.length || !gridH || !ch) && tries < 10) {
           setTimeout(() => measureScrollBounds(tries + 1), 60)
           return
         }
-        maxScroll = Math.min(0, vh - ch)
+        // 抽屉面板始终以 TALL_H 高度绝对贴底、靠 translateY 裁剪，所以 .grid 元素
+        // 高度是"含屏幕外部分"的完整高度。真正的可滚动视口 = 屏幕上实际露出的部分
+        // = 屏高 - 网格顶部Y（面板底部与屏幕底部对齐）。用它算 maxScroll，开态才
+        // 能滚到被裁到屏幕外的卡片。
+        const screenH = props.viewportH || 760
+        const visibleVh = Math.max(0, Math.min(gridH, screenH - gridTop))
+        maxScroll = Math.min(0, visibleVh - ch)
         scrollY.value = clamp(scrollY.value, maxScroll, 0)
       })
   } catch (_) {}
@@ -257,6 +267,10 @@ onMounted(() => nextTick(() => measureScrollBounds()))
 watch(() => props.rowItems, () => {
   scrollY.value = 0
   nextTick(() => measureScrollBounds())
+})
+// 抽屉状态切换（开↔满）改变露出高度 → 视口变化，过渡结束后重新测量滚动范围。
+watch(() => props.shelfState, () => {
+  nextTick(() => setTimeout(() => measureScrollBounds(), 360))
 })
 
 function clearLongPress() {
@@ -339,6 +353,13 @@ function endGesture(x: number, y: number) {
   if (phase === 'drag' && item) {
     emit('material-drag-end', item, x, y, true)
   } else if (phase === 'scroll') {
+    // 边缘联动抽屉状态：网格已在顶部还继续下滑 → 收起一级；已在底部（或内容
+    // 不足无需滚动）还继续上滑 → 展开一级。中间区域交给正常滚动/惯性。
+    const dy = y - g.sy
+    const atTop = g.scrollY0 >= -1
+    const atBottom = g.scrollY0 <= maxScroll + 1
+    if (dy > SHELF_EDGE_SWIPE && atTop) { emit('shelf-swipe', 'down'); return }
+    if (dy < -SHELF_EDGE_SWIPE && atBottom) { emit('shelf-swipe', 'up'); return }
     startMomentum()
   } else if (phase === 'pending' && !g.moved && item) {
     // quick tap with no movement on a card -> select

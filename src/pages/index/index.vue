@@ -168,6 +168,8 @@
         :sub-cats="subCats"
         :sub-cat="subCat"
         :row-items="rowItems"
+        :viewport-h="pageH"
+        :shelf-state="shelfState"
         @toggle-collapsed="toggleMaterialCollapsed"
         @touch-start="onSheetTouchStart"
         @touch-move="onSheetTouchMove"
