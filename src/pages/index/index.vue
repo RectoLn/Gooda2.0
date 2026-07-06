@@ -241,7 +241,6 @@
     <SpuSearchPanel
       :open="spuSearchOpen"
       :service-mode="spuService.mode"
-      :keyword="spuKeyword"
       :loading="spuLoading"
       :error="spuError"
       :searched="spuSearched"
@@ -249,7 +248,6 @@
       :importing-id="spuImportingId"
       :owned-ids="ownedSpuIds"
       @close="closeSpuSearch"
-      @keyword-input="onSpuKeywordInput"
       @search="runSpuSearch"
       @import-item="importSpuFromLibrary"
     />
@@ -2632,12 +2630,12 @@ function openSpuSearch() {
 function closeSpuSearch() {
   spuSearchOpen.value = false
 }
-function onSpuKeywordInput(event: any) {
-  spuKeyword.value = inputValue(event)
-}
-async function runSpuSearch() {
-  const keyword = spuKeyword.value.trim()
-  if (!keyword) {
+// keyword 由面板在搜索时随事件传入（打字期间不回流父组件，避免重渲染打断拼音输入）。
+// 省略入参时回退到 spuKeyword（headless 钩子可先设 spuKeyword 再调 search）。
+async function runSpuSearch(keyword?: string) {
+  const kw = (typeof keyword === 'string' ? keyword : spuKeyword.value).trim()
+  spuKeyword.value = kw
+  if (!kw) {
     Taro.showToast({ title: '输入 IP / 角色 / 谷子名', icon: 'none' })
     return
   }
@@ -2646,7 +2644,7 @@ async function runSpuSearch() {
   spuError.value = ''
   spuSearched.value = true
   try {
-    const result = await spuService.client.searchSpu({ keyword, page: 1, pageSize: 24 })
+    const result = await spuService.client.searchSpu({ keyword: kw, page: 1, pageSize: 24 })
     if (seq !== spuSearchSeq) return
     spuItems.value = result.items
   } catch (err: any) {

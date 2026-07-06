@@ -9,18 +9,20 @@
         演示数据 · 资料库服务未配置（联调时设置 TARO_APP_SPU_PROXY_BASE）
       </view>
       <view class="spu-search-row">
-        <!-- 非受控输入：不要把 keyword 反绑到 :value。受控回写会在拼音输入法组合
-             过程中被框架每次按键重置原生 input，导致失焦/选字后无法继续输入。
-             面板 v-if 每次打开都重挂载 → 输入框天然清空；关键词经 @input 收集用于搜索。 -->
+        <!-- 拼音失焦根因：weapp/Dimina 运行时在组件重渲染时会重建原生 input，打断 IME
+             组合态 → 失焦/无法选字。所以打字期间【绝不触发任何重渲染】：
+             1) 不绑 :value（非受控）；2) @input 只写面板本地的【非响应式】变量 keywordValue
+             （普通 let，改它不会 re-render）；3) 到搜索/回车才把关键词随事件抛给父组件。
+             面板 v-if 每次打开都重挂载 → keywordValue 天然重置为空。 -->
         <input
           class="spu-input"
           type="text"
           confirm-type="search"
           placeholder="搜索 IP / 角色 / 谷子名"
-          @input="$emit('keyword-input', $event)"
-          @confirm="$emit('search')"
+          @input="onInput"
+          @confirm="onSearch"
         />
-        <view class="spu-search-btn" @tap="$emit('search')">搜索</view>
+        <view class="spu-search-btn" @tap="onSearch">搜索</view>
       </view>
       <view class="spu-body">
         <view v-if="loading" class="spu-status"><text>搜索中…</text></view>
@@ -70,7 +72,6 @@ import type { QiandaoSpuServiceMode } from '../../../services/qiandao/client'
 defineProps<{
   open: boolean
   serviceMode: QiandaoSpuServiceMode
-  keyword: string
   loading: boolean
   error: string
   searched: boolean
@@ -79,10 +80,19 @@ defineProps<{
   ownedIds: string[]
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   (e: 'close'): void
-  (e: 'keyword-input', event: any): void
-  (e: 'search'): void
+  (e: 'search', keyword: string): void
   (e: 'import-item', item: QiandaoSpuSummary): void
 }>()
+
+// 关键：非响应式（普通 let，不是 ref）——@input 改它不触发任何重渲染，原生 input
+// 的 IME 组合态因此不会被打断。面板 v-if 重挂载时随组件重建自动归零。
+let keywordValue = ''
+function onInput(e: any) {
+  keywordValue = (e && e.detail && e.detail.value) || ''
+}
+function onSearch() {
+  emit('search', keywordValue.trim())
+}
 </script>
