@@ -29,13 +29,13 @@
           :key="ly.id"
           class="layer-slot"
         >
-          <text class="layer-rank">{{ layerOrderLabel(idx) }}</text>
           <view
             class="layer-row"
             :class="{ on: ly.id === selectedId, lifting: ly.id === reorderId, insert: idx === reorderTargetVis && ly.id !== reorderId, settled: ly.id === settledReorderId, fixed: ly.fixed }"
             :style="layerRowStyle(ly, idx)"
             @tap="$emit('select-layer', ly.id)"
           >
+            <text class="layer-rank">{{ layerOrderLabel(idx) }}</text>
             <view
               class="row-drag"
               :class="{ disabled: ly.fixed }"

@@ -53,9 +53,18 @@
         </view>
         <view v-if="devTools" style="position:absolute;left:4px;bottom:2px;z-index:9999;font-size:20rpx;color:#ff0;background:rgba(0,0,0,.55);padding:2rpx 6rpx">img {{ crop.imageW }}x{{ crop.imageH }} · stage {{ crop.stageW }}x{{ crop.stageH }} · max {{ crop.stageMaxW }}x{{ crop.stageMaxH }} · via {{ measureTag }} · sel {{ Math.round(crop.x) }},{{ Math.round(crop.y) }},{{ Math.round(crop.w) }},{{ Math.round(crop.h) }}</view>
       </view>
-      <!-- bottom drawer: classification fields (tap the grabber to fold away) -->
-      <view class="import-drawer" :class="{ collapsed: drawerCollapsed }">
-        <view class="import-drawer-grabber" @tap="$emit('update:drawerCollapsed', !drawerCollapsed)">
+      <!-- bottom drawer: classification fields — 拖 handle 上拉展开 / 下拉收起，
+           轻点亦可折叠切换 -->
+      <view class="import-drawer" :class="{ collapsed: drawerCollapsed, dragging: grabDragging }">
+        <view
+          class="import-drawer-grabber"
+          @tap="onGrabTap"
+          @touchstart.stop="onGrabTouchStart"
+          @touchmove.stop="onGrabTouchMove"
+          @touchend.stop="onGrabTouchEnd"
+          @touchcancel.stop="onGrabTouchEnd"
+          @mousedown.stop="onGrabMouseDown"
+        >
           <view class="import-drawer-handle" />
         </view>
         <view class="import-drawer-body">
@@ -103,6 +112,7 @@
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue'
 import type { Shape } from '../editor-core'
 
 type ImportCropState = {
@@ -113,7 +123,7 @@ type ImportCropState = {
 type ImportDraftState = { shape: Shape; editAssetId: string; label: string; sub: string }
 type StyleMap = Record<string, string | number>
 
-defineProps<{
+const props = defineProps<{
   open: boolean
   previewSrc: string
   crop: ImportCropState
@@ -130,7 +140,7 @@ defineProps<{
   measureTag: string
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   (e: 'cancel'): void
   (e: 'confirm'): void
   (e: 'crop-touch-start', event: any): void
@@ -145,4 +155,64 @@ defineEmits<{
   (e: 'smart-recognition'): void
   (e: 'update:drawerCollapsed', value: boolean): void
 }>()
+
+// ── 抽屉推拉：拖 handle 上拉展开 / 下拉收起（阈值判定于松手时），轻点则折叠切换。
+// 与素材货架同一套单流手势模型：touch 为主，H5 用 window 监听兜底。
+const DRAG_SLOP = 18        // 位移超过它才算「拖」（否则交给 @tap）
+const FOLD_THRESHOLD = 26   // 拖动方向上超过它才切换折叠态
+const grabDragging = ref(false)
+let grab = { y0: 0, moved: false, decided: false }
+
+function grabBegin(y: number) {
+  grab = { y0: y, moved: false, decided: false }
+  grabDragging.value = true
+}
+function grabMove(y: number) {
+  if (!grabDragging.value) return
+  const dy = y - grab.y0
+  if (!grab.moved && Math.abs(dy) > DRAG_SLOP) grab.moved = true
+  if (grab.moved && !grab.decided) {
+    // 展开态下拉 → 收起；收起态上拉 → 展开
+    if (dy > FOLD_THRESHOLD && !props.drawerCollapsed) {
+      grab.decided = true
+      emit('update:drawerCollapsed', true)
+    } else if (dy < -FOLD_THRESHOLD && props.drawerCollapsed) {
+      grab.decided = true
+      emit('update:drawerCollapsed', false)
+    }
+  }
+}
+function grabEnd() {
+  grabDragging.value = false
+}
+
+function onGrabTap() {
+  // 拖动已在 move 时切换过折叠态，就不再让轻点重复切换
+  if (grab.moved) { grab.moved = false; return }
+  emit('update:drawerCollapsed', !props.drawerCollapsed)
+}
+function onGrabTouchStart(e: any) {
+  const t = e && e.touches && e.touches[0]
+  if (!t) return
+  grabBegin(t.clientY)
+}
+function onGrabTouchMove(e: any) {
+  const t = e && e.touches && e.touches[0]
+  if (!t) return
+  grabMove(t.clientY)
+}
+function onGrabTouchEnd() { grabEnd() }
+// H5 鼠标：只做拖动判定；点击交给 @tap(click)，避免与 up 双触发折叠
+function onGrabMouseDown(e: any) {
+  if (typeof window === 'undefined') return
+  grabBegin(e.clientY)
+  const move = (ev: MouseEvent) => grabMove(ev.clientY)
+  const up = () => {
+    window.removeEventListener('mousemove', move)
+    window.removeEventListener('mouseup', up)
+    grabEnd()
+  }
+  window.addEventListener('mousemove', move)
+  window.addEventListener('mouseup', up)
+}
 </script>

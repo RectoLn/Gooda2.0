@@ -50,7 +50,9 @@
               <view v-else class="spu-card-noimg"><text>无图</text></view>
               <text v-if="it.transparentImage" class="spu-card-badge">透明图</text>
             </view>
-            <text class="spu-card-title">{{ it.title }}</text>
+            <view class="spu-card-titlebox">
+              <text class="spu-card-title">{{ it.title }}</text>
+            </view>
             <text class="spu-card-type">{{ [it.typeName, it.priceText].filter(Boolean).join(' · ') || ' ' }}</text>
             <view
               class="spu-card-import"

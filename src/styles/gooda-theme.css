@@ -14,6 +14,11 @@ bottom: 0;
 --blue-strong: #1f65b7;
 --blue-soft: #5f95c7;
 --blue-bg: #eef7ff;
+/* 淡雅主行动态：与主页下载按钮(.export-btn)完全一致——淡蓝底 + 蓝字，
+   替代面板里过深过饱和的实心 #1f65b7 白字按钮 */
+--action-fill: rgba(31,101,183,.12);
+--action-ring: rgba(31,101,183,.20);
+--action-text: #1b5fae;
 --text-strong: #183d70;
 --text-primary: #1d1d1f;
 --glass-panel: rgba(255,255,255,.18);
@@ -1596,10 +1601,8 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
 
 .layer-slot {
    height: 50PX;
-   display: grid;
-   grid-template-columns: 24PX 1fr;
+   display: flex;
    align-items: center;
-   gap: 6PX;
    border-bottom: 1PX solid rgba(95,149,199,.12);
 }
 
@@ -1607,7 +1610,6 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
    color: rgba(60,60,67,.48);
    font-size: 12PX;
    font-weight: 650;
-   line-height: 46PX;
    text-align: center;
    font-variant-numeric: tabular-nums;
    pointer-events: none;
@@ -1615,13 +1617,15 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
 
 .layer-row {
    position: relative;
+   width: 100%;
    height: 46PX;
+   /* 序号并入行内：选中态的淡蓝圆角高亮带把图层数字一起包进去 */
    display: grid;
-   grid-template-columns: 26PX 1fr 24PX;
+   grid-template-columns: 22PX 26PX 1fr 24PX;
    align-items: center;
-   gap: 8PX;
+   gap: 6PX;
    border-radius: 8PX;
-   padding: 0 7PX 0 4PX;
+   padding: 0 7PX 0 6PX;
    /* 蓝白简约：resting 态透明（分割靠 slot 的 hairline），去掉逐行卡片底 */
    background: transparent;
    transform: translate3d(0, var(--row-shift, 0), 0);
@@ -2054,10 +2058,10 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
    box-sizing: border-box;
 }
 .import-topbar-btn.primary {
-   /* 蓝白简约：主操作实心蓝胶囊（顶部原生胶囊安全区 128PX 不变） */
-   background: var(--blue-strong, #1f65b7);
-   color: #fff;
-   box-shadow: 0 2PX 6PX rgba(31,101,183,.22);
+   /* 淡雅蓝：淡蓝底 + 蓝字，与主页操作按钮一致（顶部原生胶囊安全区 128PX 不变） */
+   background: var(--action-fill);
+   color: var(--action-text);
+   box-shadow: inset 0 0 0 1PX var(--action-ring);
 }
 
 /* the stage grabs all the height the top bar + drawer leave behind */
@@ -2427,10 +2431,10 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
 }
 
 .import-editor-type.on {
-   /* 选中=实心蓝（去玻璃高光） */
-   background: var(--blue-strong, #1f65b7);
+   /* 选中=实心中蓝 + 白字（mockup 选中色 ≈ --blue-soft，比深蓝 #1f65b7 柔和） */
+   background: var(--blue-soft, #5f95c7);
    color: #fff;
-   font-weight: 560;
+   font-weight: 620;
    box-shadow: none;
 }
 
@@ -2459,10 +2463,10 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
 }
 
 .import-editor-shape.on {
-   /* 选中=实心蓝（去玻璃高光） */
-   background: var(--blue-strong, #1f65b7);
+   /* 选中=实心中蓝 + 白字（mockup 选中色 ≈ --blue-soft，比深蓝 #1f65b7 柔和） */
+   background: var(--blue-soft, #5f95c7);
    color: #fff;
-   font-weight: 560;
+   font-weight: 620;
    box-shadow: none;
 }
 
@@ -2734,10 +2738,10 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
    justify-content: center;
    font-size: 14PX;
    font-weight: 620;
-   /* 蓝白简约：主操作实心蓝胶囊，白字，一眼可见（去玻璃底） */
-   background: var(--blue-strong, #1f65b7);
-   color: #fff;
-   box-shadow: 0 2PX 6PX rgba(31,101,183,.20);
+   /* 淡雅蓝：淡蓝底 + 蓝字，与主页操作按钮一致（去实心深蓝） */
+   background: var(--action-fill);
+   color: var(--action-text);
+   box-shadow: inset 0 0 0 1PX var(--action-ring);
 }
 .spu-body {
    flex: 1 1 auto;
@@ -2847,12 +2851,19 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
    font-weight: 600;
    box-shadow: 0 1PX 3PX rgba(44,122,88,.35);
 }
+/* 固定两行高度的标题容器：所有卡片等高 → 导入/已入池按钮永远在同一水平线；
+   1 行标题在容器内垂直居中，2 行标题占满 */
+.spu-card-titlebox {
+   width: 100%;
+   height: 34PX;
+   margin-top: 2PX;
+   display: flex;
+   align-items: center;
+   justify-content: center;
+}
 .spu-card-title {
    width: 100%;
    max-width: 100%;
-   /* 自适应高度：最多两行，1 行时卡片自然变矮，不再固定 34PX 留空 */
-   min-height: 17PX;
-   margin-top: 2PX;
    font-size: 12PX;
    line-height: 17PX;
    font-weight: 520;
@@ -2888,10 +2899,10 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
    justify-content: center;
    font-size: 12PX;
    font-weight: 640;
-   /* 蓝白简约：主行动实心蓝色块（去渐变/减重阴影），满屏卡片里一眼可见 */
-   background: var(--blue-strong, #1f65b7);
-   color: #fff;
-   box-shadow: 0 2PX 6PX rgba(31,101,183,.20);
+   /* 淡雅蓝：淡蓝底 + 蓝字，与主页操作按钮一致（去实心深蓝） */
+   background: var(--action-fill);
+   color: var(--action-text);
+   box-shadow: inset 0 0 0 1PX var(--action-ring);
    box-sizing: border-box;
    overflow: hidden;
    white-space: nowrap;
