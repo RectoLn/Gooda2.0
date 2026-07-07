@@ -1137,6 +1137,8 @@ onMounted(async () => {
       measureImageSize, imageSizeFromDataUrl, measureImportDraftImageSize,
       openImportEditorFromAsset, confirmImportEditor, computeImportCropRect,
       userAssets, category, subCat,
+      // 历史 / 持久化回归（headless 验证用）
+      undo, redo, commit, removeLayer, persistUserAssets, loadUserAssets,
       // SPU 资料库导入链路（headless 验证用）
       spu: {
         mode: spuService.mode,

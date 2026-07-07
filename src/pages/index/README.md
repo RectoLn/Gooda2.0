@@ -111,6 +111,7 @@ This page is the MVP mobile layer editor for 痛包 / 谷子 layout work. The cu
 - Type + build gate: `npm run check` (= `npm run typecheck` + `npm run build:h5`). Native: `npm run build`.
 - Crop WYSIWYG + edit round-trip + import-editor DOM/wiring (headless H5): `node scripts/verify-crop.cjs` (needs a fresh `build:h5`).
 - Layer gestures (drag + rotate, mouse path — shares math with touch): `node scripts/verify-gestures.cjs` (needs a fresh `build:h5`). Touch precision itself is a manual device check.
+- Undo/redo snapshot round-trip + user-asset persistence hydration (headless H5): `node scripts/verify-state.cjs` (needs a fresh `build:h5`). Guards history-stack corruption and assets vanishing on reload — the two highest-risk stateful paths.
 - Real Dimina runtime (the actual target — H5 differs!): start the Dimina `fe` dev server (`pnpm dev`),
   then `bash scripts/dimina-redeploy.sh` and `node scripts/dimina-test.cjs`. Override machine paths with
   `QDMP_CLI`, `DIMINA`, `PUPPETEER_DIR`, `DIMINA_URL` env vars.
