@@ -86,7 +86,12 @@ export const boards: { label: string; src?: string; color?: string; sub: string;
   { label: '丁香紫', color: '#DDD5EE', sub: '纯色', aspect: 426 / 300 },
 ]
 // 痛包：一款可有多色变体（暂仅一个真实素材，结构预留多色 + spuId）
-export const BAG_BACK_CROP = { x: 150, y: 539, w: 821, h: 415 }
+// 丹宁包 back 是整袋图；这是其奶油背板面在图中的【归一化】包围盒（0~1，实测自
+// 688×860 的 bag-back.png）。预览(index.vue)与导出(editor-export)都按归一化解释，
+// 与实际像素尺寸解耦。
+export const BAG_BACK_CROP = { x: 0.1337, y: 0.3849, w: 0.7311, h: 0.2953 }
+// 背板整体放大系数：消除背板与包体窗口衔接处的缝隙。预览与导出共用，保证 WYSIWYG。
+export const BAG_BACK_BLEED = 1.05
 export const bags: Bag[] = [
   { label: '丹宁包', front: bagFront, back: bagBack, preview: bagPreview, spuId: 'spu_bag_denim_01', win: { l: 0.2031, t: 0.4844, r: 0.8109, b: 0.7844 }, backCrop: BAG_BACK_CROP },
   { label: '蝴蝶结包', front: bagWhiteBowFront, back: bagWhiteBowBack, preview: bagWhiteBowPreview, spuId: 'spu_bag_white_bow_01', win: { l: 0.2687, t: 0.6203, r: 0.7453, b: 0.9203 } },

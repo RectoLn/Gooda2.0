@@ -1,5 +1,5 @@
 import Taro from '@tarojs/taro'
-import { EXPORT_SIZE, boards, bags, roundRectPath, drawRoundedImage, drawCroppedRoundedImage, loadImg, srcKind } from './editor-core'
+import { EXPORT_SIZE, BAG_BACK_BLEED, boards, bags, roundRectPath, drawRoundedImage, drawCroppedRoundedImage, loadImg, srcKind } from './editor-core'
 import type { Layer, ExportHistoryRecord, StoredExportHistoryRecord } from './editor-core'
 
 type ExportEditorImageOptions = {
@@ -146,10 +146,19 @@ export async function exportEditorImage(options: ExportEditorImageOptions): Prom
     if (bags[curBag].back) {
       const back = await load(bags[curBag].back, '痛包内衬')
       const crop = bags[curBag].backCrop
+      // 与预览(index.vue bagBackFillStyle)同一套：背板整体放大 BAG_BACK_BLEED 居中铺进
+      // 窗口（已 clip 到 win），消除衔接缝隙。crop 为归一化包围盒 → 乘图片像素得源矩形。
+      const s = BAG_BACK_BLEED
+      const dw = win.w * s
+      const dh = win.h * s
+      const dx = win.x + (win.w - dw) / 2
+      const dy = win.y + (win.h - dh) / 2
       if (crop) {
-        ctx.drawImage(back, crop.x, crop.y, crop.w, crop.h, win.x, win.y, win.w, win.h)
+        const bw = back.width || back.naturalWidth || 0
+        const bh = back.height || back.naturalHeight || 0
+        ctx.drawImage(back, crop.x * bw, crop.y * bh, crop.w * bw, crop.h * bh, dx, dy, dw, dh)
       } else {
-        ctx.drawImage(back, win.x, win.y, win.w, win.h)
+        ctx.drawImage(back, dx, dy, dw, dh)
       }
     }
     if (curBoard >= 0 && boardLayer) {

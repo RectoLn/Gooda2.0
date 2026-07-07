@@ -322,7 +322,7 @@ import { useUserAssets } from './use-user-assets'
 import { useExportHistory } from './use-export-history'
 import { removeImageBackground, CutoutServiceError, CUTOUT_REASON_TEXT } from '../../services/cutout/client'
 import {
-  STORAGE_KEY, STORAGE_VERSION, EXPORT_SIZE, BAG_RATIO, BOARD_LAYER_ID, WIN, ROW_PITCH,
+  STORAGE_KEY, STORAGE_VERSION, BAG_RATIO, BOARD_LAYER_ID, WIN, ROW_PITCH, BAG_BACK_BLEED,
   boards, bags, cats, decor, SUBCATS,
   clamp, dist, ang, cropInnerStyle,
   boundedScale, normalizeRotation, displayRotation, formatScale, formatRotation,
@@ -641,20 +641,26 @@ const boardLayerInnerStyle = computed(() => ({
   transform: boardLayer.flipX ? 'scaleX(-1)' : 'none',
 }))
 const bagBackFillStyle = computed(() => {
-  // 用 px（相对当前窗口 win.w/win.h）而非百分比：Dimina 渲染器对嵌套 <image> 的
-  // 百分比 left/top/width/height 不生效（与素材卡裁剪卡走 px 分支同源问题），会让
-  // 无底板状态下背板整块不显示（空窗）。H5 上 px 与原百分比几何完全等价。
+  // 背板几何用 px（相对窗口 win）而非百分比：Dimina 对嵌套 <image> 的百分比
+  // left/top/width/height 不生效，会让背板整块不显示（空窗）。整体放大 BAG_BACK_BLEED
+  // 以消除背板与包体窗口衔接处的缝隙；与导出(editor-export)同一套裁剪+放大，保证 WYSIWYG。
+  const s = BAG_BACK_BLEED
   const crop = bags[curBag.value]?.backCrop
-  // 无 backCrop 的痛包，其 back 素材本身就是裁好的背板面 → 直接铺满窗口。
-  if (!crop) return { left: '0px', top: '0px', width: `${win.w}px`, height: `${win.h}px` }
-  // 有 backCrop：back 是整袋图，按裁剪区把背板面对准窗口（sx/sy 把 crop 区映射到窗口）。
-  const sx = win.w / crop.w
-  const sy = win.h / crop.h
+  if (!crop) {
+    // 无 backCrop：back 素材本身就是背板面 → 铺满窗口，居中放大 s 消缝。
+    const w = win.w * s
+    const h = win.h * s
+    return { left: `${(win.w - w) / 2}px`, top: `${(win.h - h) / 2}px`, width: `${w}px`, height: `${h}px` }
+  }
+  // 有 backCrop（丹宁包）：crop 是背板面在整袋图中的归一化包围盒。fullW/fullH 为整图
+  // 渲染尺寸，使 crop 区宽高各等于 win.w*s / win.h*s；再把 crop 区中心对准窗口中心。
+  const fullW = (win.w / crop.w) * s
+  const fullH = (win.h / crop.h) * s
   return {
-    left: `${-crop.x * sx}px`,
-    top: `${-crop.y * sy}px`,
-    width: `${EXPORT_SIZE * sx}px`,
-    height: `${EXPORT_SIZE * sy}px`,
+    left: `${win.w / 2 - (crop.x + crop.w / 2) * fullW}px`,
+    top: `${win.h / 2 - (crop.y + crop.h / 2) * fullH}px`,
+    width: `${fullW}px`,
+    height: `${fullH}px`,
   }
 })
 
