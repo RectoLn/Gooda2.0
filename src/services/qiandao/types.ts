@@ -108,14 +108,21 @@ export function inferGuziSubFromSpu(spu: Pick<QiandaoSpuSummary, 'typeName' | 't
 }
 
 // 搜索结果的粗品类分桶，用于结果加权重排：谷子/周边（主力）> 卡 > 玩具。
-// 卡：小卡/卡牌/收藏卡等；玩具：typeId 15（实测的玩具类目）或标题含玩具词；其余归谷子/周边。
+// 千岛 SPU 顶层 typeId 分类稳定（实测跨关键词一致），优先用它判定，最可靠：
+//   1512146=卡、15=玩具，其余（1002893 谷子&周边、53210 潮玩周边…）皆归谷子/周边。
+// 仅当 typeId 缺失（个别详情记录可能没有）才退回标题/类目名文本启发式兜底。
 export type SpuResultBucket = '谷子/周边' | '卡' | '玩具'
+export const SPU_CARD_TYPE_ID = '1512146'
+export const SPU_TOY_TYPE_ID = '15'
 const SPU_CARD_RE = /小卡|卡牌|收藏卡|卡片|镭射票|拍立得|card/i
 const SPU_TOY_RE = /玩偶|娃娃|公仔|手办|摆件|盲盒玩具|玩具|figure|doll|toy/i
 export function spuResultBucket(spu: Pick<QiandaoSpuSummary, 'typeName' | 'title' | 'typeId'>): SpuResultBucket {
+  if (spu.typeId === SPU_CARD_TYPE_ID) return '卡'
+  if (spu.typeId === SPU_TOY_TYPE_ID) return '玩具'
+  if (spu.typeId) return '谷子/周边'
   const text = `${spu.typeName || ''} ${spu.title || ''}`
   if (SPU_CARD_RE.test(text)) return '卡'
-  if (spu.typeId === '15' || SPU_TOY_RE.test(text)) return '玩具'
+  if (SPU_TOY_RE.test(text)) return '玩具'
   return '谷子/周边'
 }
 
