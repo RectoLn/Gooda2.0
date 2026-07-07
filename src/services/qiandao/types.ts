@@ -106,3 +106,39 @@ export function inferGuziSubFromSpu(spu: Pick<QiandaoSpuSummary, 'typeName' | 't
   }
   return '其他'
 }
+
+// 搜索结果的粗品类分桶，用于结果加权重排：谷子/周边（主力）> 卡 > 玩具。
+// 卡：小卡/卡牌/收藏卡等；玩具：typeId 15（实测的玩具类目）或标题含玩具词；其余归谷子/周边。
+export type SpuResultBucket = '谷子/周边' | '卡' | '玩具'
+const SPU_CARD_RE = /小卡|卡牌|收藏卡|卡片|镭射票|拍立得|card/i
+const SPU_TOY_RE = /玩偶|娃娃|公仔|手办|摆件|盲盒玩具|玩具|figure|doll|toy/i
+export function spuResultBucket(spu: Pick<QiandaoSpuSummary, 'typeName' | 'title' | 'typeId'>): SpuResultBucket {
+  const text = `${spu.typeName || ''} ${spu.title || ''}`
+  if (SPU_CARD_RE.test(text)) return '卡'
+  if (spu.typeId === '15' || SPU_TOY_RE.test(text)) return '玩具'
+  return '谷子/周边'
+}
+
+// 各桶权重（谷子/周边 : 卡 : 玩具 = 6 : 3 : 1）。权重越高越倾向排前。
+export const SPU_BUCKET_WEIGHT: Record<SpuResultBucket, number> = {
+  '谷子/周边': 6,
+  卡: 3,
+  玩具: 1,
+}
+
+// 加权随机重排（Efraimidis–Spirakis 加权抽样）：每项 key = random^(1/weight)，按 key
+// 降序。权重高的更可能靠前，但仍是随机「打乱」而非硬分组 → 越往前谷子/周边越密集，
+// 玩具稀疏落尾。纯重排不删任何项，所以各桶只要原本有就不会为零。rng 可注入以便测试。
+export function weightedShuffleSpus<T extends Pick<QiandaoSpuSummary, 'typeName' | 'title' | 'typeId'>>(
+  items: T[],
+  rng: () => number = Math.random,
+): T[] {
+  return items
+    .map((item) => {
+      const weight = SPU_BUCKET_WEIGHT[spuResultBucket(item)] || 1
+      const r = rng()
+      return { item, key: Math.pow(r > 0 ? r : Number.EPSILON, 1 / weight) }
+    })
+    .sort((a, b) => b.key - a.key)
+    .map((entry) => entry.item)
+}

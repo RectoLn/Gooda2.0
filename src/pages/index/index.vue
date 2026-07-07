@@ -336,7 +336,7 @@ import { cropImageFrame, normalizeCropRect, denormalizeCropRect } from './crop-m
 import { measureRect } from '../../platform/measure'
 import { imageSizeFromLocalFile, imageSourceToDataUrl, remoteImageToDataUrl, saveImageNativeSmart } from '../../platform/image-io'
 import { resolveQiandaoSpuService, QiandaoSpuServiceError } from '../../services/qiandao/client'
-import { bestSpuImage, inferGuziSubFromSpu, isSeriesSpu } from '../../services/qiandao/types'
+import { bestSpuImage, inferGuziSubFromSpu, isSeriesSpu, weightedShuffleSpus } from '../../services/qiandao/types'
 import type { QiandaoSpuSummary } from '../../services/qiandao/types'
 import appWaterBg from '../../assets/app-water-bg.jpg'
 
@@ -2491,11 +2491,13 @@ async function runSpuSearch(keyword?: string) {
     }
     // 去重（跨页可能重复）+ 滤掉整盒/系列，只留系列里的具体单品（吧唧/立牌/卡…）。
     const seen = new Set<string>()
-    spuItems.value = merged.filter((it) => {
+    const singles = merged.filter((it) => {
       if (seen.has(it.id) || isSeriesSpu(it)) return false
       seen.add(it.id)
       return true
     })
+    // 按品类加权重排：谷子/周边（主力）靠前密集，卡次之，玩具稀疏落尾（不删项）。
+    spuItems.value = weightedShuffleSpus(singles)
   } catch (err: any) {
     if (seq !== spuSearchSeq) return
     spuItems.value = []
