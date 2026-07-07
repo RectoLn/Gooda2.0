@@ -621,8 +621,9 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
 .layer-handle {
    position: absolute;
    z-index: 40;
-   width: 27PX;
-   height: 27PX;
+   /* 热区 28px（视觉圆点仍是 ::before 的 20px）：四角按钮更易点中 */
+   width: 28PX;
+   height: 28PX;
    border-radius: 999PX;
    background: transparent;
    border: 0;
@@ -1274,6 +1275,32 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
    gap: 12PX 8PX;
    padding: 2PX 2PX 10PX;
    box-sizing: border-box;
+}
+
+/* Thin overlay scrollbar for the custom-scrolled grid. Fades in while scrolling. */
+.grid-scrollbar {
+   position: absolute;
+   top: 2PX;
+   right: 2PX;
+   bottom: 2PX;
+   width: 3PX;
+   pointer-events: none;
+   opacity: 0;
+   transition: opacity .25s ease;
+   z-index: 6;
+}
+
+.grid-scrollbar.on {
+   opacity: 1;
+}
+
+.grid-scrollbar-thumb {
+   position: absolute;
+   top: 0;
+   right: 0;
+   width: 3PX;
+   border-radius: 3PX;
+   background: rgba(31,101,183,.32);
 }
 
 .cell {

@@ -118,12 +118,16 @@
           <text class="cell-label">{{ it.label }}</text>
         </view>
       </view>
+      <!-- thin overlay scrollbar; tracks the viewport (not scrolled with content) -->
+      <view v-if="scrollbar.show" class="grid-scrollbar" :class="{ on: barVisible }">
+        <view class="grid-scrollbar-thumb" :style="{ height: scrollbar.thumbH + 'px', transform: `translateY(${scrollbar.top}px)` }" />
+      </view>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import Taro from '@tarojs/taro'
 import { cropInnerStyle, cropBoxFitPx } from '../editor-core'
 import type { CatName, Mat, RowItem } from '../editor-core'
@@ -200,7 +204,28 @@ const MOVE_SLOP = 8          // px of movement before we commit to scroll/drag
 
 // Manual scroll state (translateY on .grid-inner).
 const scrollY = ref(0)
-let maxScroll = 0            // most-negative scroll offset (0 when content fits)
+const gridViewH = ref(0)     // visible viewport height of the grid
+const gridContentH = ref(0)  // full content (.grid-inner) height
+// most-negative scroll offset (0 when content fits). Reactive so the scrollbar tracks it.
+const maxScroll = computed(() => Math.min(0, gridViewH.value - gridContentH.value))
+
+// Thin overlay scrollbar (iOS-style: fades out shortly after scrolling stops).
+const barVisible = ref(false)
+let barTimer: any = 0
+function pokeScrollbar() {
+  barVisible.value = true
+  if (barTimer) clearTimeout(barTimer)
+  barTimer = setTimeout(() => { barVisible.value = false; barTimer = 0 }, 700)
+}
+const scrollbar = computed(() => {
+  const view = gridViewH.value
+  const content = gridContentH.value
+  if (!view || content <= view + 1) return { show: false, thumbH: 0, top: 0 }
+  const thumbH = Math.max(28, (view * view) / content)
+  const denom = maxScroll.value || -1
+  const frac = clamp(scrollY.value / denom, 0, 1) // 0 at top → 1 at bottom
+  return { show: true, thumbH, top: frac * (view - thumbH) }
+})
 
 let g = {
   item: null as RowItem | null,
@@ -256,8 +281,9 @@ function measureScrollBounds(tries = 0) {
         // 能滚到被裁到屏幕外的卡片。
         const screenH = props.viewportH || 760
         const visibleVh = Math.max(0, Math.min(gridH, screenH - gridTop))
-        maxScroll = Math.min(0, visibleVh - ch)
-        scrollY.value = clamp(scrollY.value, maxScroll, 0)
+        gridViewH.value = visibleVh
+        gridContentH.value = ch
+        scrollY.value = clamp(scrollY.value, maxScroll.value, 0)
       })
   } catch (_) {}
 }
@@ -279,15 +305,21 @@ function clearLongPress() {
 function stopMomentum() {
   if (momentumTimer) { clearTimeout(momentumTimer); momentumTimer = 0 }
 }
+// Momentum feel: gentler fling threshold + slower decay than before → a slight glide
+// after release (略微惯性), without turning into a long free-scroll.
+const FLING_MIN_V = 0.7      // px/frame at release below which we don't fling
+const MOMENTUM_DECAY = 0.94  // per-frame velocity retention (higher = longer glide)
+const MOMENTUM_STOP_V = 0.3  // px/frame below which momentum ends
 function startMomentum() {
   let v = g.vy
-  if (Math.abs(v) < 1.2) return
+  if (Math.abs(v) < FLING_MIN_V) return
   const step = () => {
-    v *= 0.92
-    if (Math.abs(v) < 0.4) { momentumTimer = 0; return }
-    const next = clamp(scrollY.value + v, maxScroll, 0)
+    v *= MOMENTUM_DECAY
+    if (Math.abs(v) < MOMENTUM_STOP_V) { momentumTimer = 0; return }
+    const next = clamp(scrollY.value + v, maxScroll.value, 0)
     if (next === scrollY.value) { momentumTimer = 0; return } // hit an edge
     scrollY.value = next
+    pokeScrollbar()
     momentumTimer = setTimeout(step, 16)
   }
   step()
@@ -338,7 +370,8 @@ function moveGesture(x: number, y: number) {
   if (g.phase === 'scroll') {
     g.vy = y - g.lastY
     g.lastY = y
-    scrollY.value = clamp(g.scrollY0 + dy, maxScroll, 0)
+    scrollY.value = clamp(g.scrollY0 + dy, maxScroll.value, 0)
+    pokeScrollbar()
   } else if (g.phase === 'drag' && g.item) {
     emit('material-drag-move', g.item, x, y)
   }
@@ -357,7 +390,7 @@ function endGesture(x: number, y: number) {
     // 不足无需滚动）还继续上滑 → 展开一级。中间区域交给正常滚动/惯性。
     const dy = y - g.sy
     const atTop = g.scrollY0 >= -1
-    const atBottom = g.scrollY0 <= maxScroll + 1
+    const atBottom = g.scrollY0 <= maxScroll.value + 1
     if (dy > SHELF_EDGE_SWIPE && atTop) { emit('shelf-swipe', 'down'); return }
     if (dy < -SHELF_EDGE_SWIPE && atBottom) { emit('shelf-swipe', 'up'); return }
     startMomentum()
