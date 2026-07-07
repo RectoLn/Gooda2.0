@@ -311,8 +311,7 @@ import ExportPreview from './components/ExportPreview.vue'
 import ImportCropEditor from './components/ImportCropEditor.vue'
 import SpuSearchPanel from './components/SpuSearchPanel.vue'
 import {
-  exportEditorImage, downscaleImageToDataUrl,
-  formatExportHistoryTime, normalizeExportRecord, dataUrlToFile, errMsgOf,
+  exportEditorImage, downscaleImageToDataUrl, dataUrlToFile, errMsgOf,
 } from './editor-export'
 import {
   assetToMat, guessAssetShape, placeholderColor,
@@ -320,6 +319,7 @@ import {
 } from './asset-helpers'
 import { useHistory } from './use-history'
 import { useUserAssets } from './use-user-assets'
+import { useExportHistory } from './use-export-history'
 import { removeImageBackground, CutoutServiceError, CUTOUT_REASON_TEXT } from '../../services/cutout/client'
 import {
   STORAGE_KEY, STORAGE_VERSION, EXPORT_SIZE, BAG_RATIO, BOARD_LAYER_ID, WIN, ROW_PITCH,
@@ -327,11 +327,10 @@ import {
   clamp, dist, ang, cropInnerStyle,
   boundedScale, normalizeRotation, displayRotation, formatScale, formatRotation,
 } from './editor-core'
-import type { Mat, Layer, Snapshot, RowItem, CatName, BoardTransform, Shape, ImgCrop, ExportHistoryRecord, UserAsset, StoredExportHistoryRecord } from './editor-core'
+import type { Mat, Layer, Snapshot, RowItem, CatName, BoardTransform, Shape, ImgCrop, ExportHistoryRecord, UserAsset } from './editor-core'
 import {
   normalizeImageSize, imageSizeFromFile, imageSizeFromDataUrl,
 } from './image-measure'
-import { createKvStore } from '../../services/storage/kv-store'
 import { cropImageFrame, normalizeCropRect, denormalizeCropRect } from './crop-math'
 import { measureRect } from '../../platform/measure'
 import { imageSizeFromLocalFile, imageSourceToDataUrl, remoteImageToDataUrl, saveImageNativeSmart } from '../../platform/image-io'
@@ -345,10 +344,6 @@ const LAYER_LONG_PRESS_MS = 1600
 const SHEET_PEEK_H = 86
 const SHEET_OPEN_H = 300
 const LAYER_RAIL_TOP_GUARD = 98
-const EXPORT_HISTORY_KEY = `${STORAGE_KEY}-export-history`
-const EXPORT_HISTORY_LIMIT = 8
-const EXPORT_HISTORY_DB_NAME = 'gooda-export-history'
-const EXPORT_HISTORY_STORE = 'exports'
 
 // getSystemInfoSync() 在 Dimina 原生运行时返回 null（该 API 已废弃），
 // 直接取 .windowWidth 会白屏。优先用现代的 getWindowInfo()，逐级兜底。
@@ -409,7 +404,6 @@ const doc = reactive<{ layers: Layer[] }>({ layers: [] })
 const selectedId = ref('')
 const resultSrc = ref('')
 const resultPreviewOpen = ref(false)
-const exportHistoryOpen = ref(false)
 const importEditorOpen = ref(false)
 // The crop stage measures + seeds asynchronously after the editor opens. Until that
 // finishes, importCrop does not yet reflect the real selection, so saving early would
@@ -523,7 +517,9 @@ const importCropImageStyle = computed(() => ({
 }))
 // Material-asset collection + persistence + layer-src hydration live in useUserAssets.
 const { userAssets, hydrateLayerAssetSources, persistUserAssets, loadUserAssets, removeAssetImage } = useUserAssets()
-const exportHistory = ref<ExportHistoryRecord[]>([])
+// Export-history list + persistence live in useExportHistory; open/close/preview stay
+// here because they bridge the export-preview overlay (resultSrc / resultPreviewOpen).
+const { exportHistory, exportHistoryOpen, loadExportHistory, addExportHistory, resolveHistorySrc } = useExportHistory()
 const materialAssetActionOpen = ref(false)
 const materialAssetActionId = ref('')
 const materialAssetActionLabel = computed(() => {
@@ -2631,57 +2627,6 @@ function loadWork() {
   } catch (_) {}
 }
 
-const exportHistoryStore = createKvStore(EXPORT_HISTORY_DB_NAME, EXPORT_HISTORY_STORE)
-async function persistExportHistory() {
-  const useDb = exportHistoryStore.canUse()
-  if (useDb) {
-    await Promise.all(exportHistory.value.map((record) => exportHistoryStore.put(record.id, record.src)))
-  }
-  const keepIds = new Set(exportHistory.value.map((record) => record.id))
-  const storedRecords: StoredExportHistoryRecord[] = exportHistory.value.map((record) => ({
-    id: record.id,
-    createdAt: record.createdAt,
-    name: record.name,
-    timeText: record.timeText,
-    src: useDb ? undefined : record.src,
-  }))
-  try {
-    Taro.setStorageSync(EXPORT_HISTORY_KEY, storedRecords)
-  } catch (_) {}
-  if (useDb) {
-    // Best-effort pruning; old inline-storage records are harmless if they were never mirrored.
-    const records = Taro.getStorageSync(EXPORT_HISTORY_KEY)
-    if (Array.isArray(records)) {
-      await Promise.all(records.filter((r) => r?.id && !keepIds.has(r.id)).map((r) => exportHistoryStore.del(r.id)))
-    }
-  }
-}
-async function loadExportHistory() {
-  try {
-    const records = Taro.getStorageSync(EXPORT_HISTORY_KEY)
-    if (!Array.isArray(records)) return
-    const hydrated = await Promise.all(records.map(async (r, i) => {
-      const src = r?.src || await exportHistoryStore.get(r?.id || "")
-      return normalizeExportRecord(r, i, src)
-    }))
-    exportHistory.value = hydrated
-      .filter((r): r is ExportHistoryRecord => !!r)
-      .sort((a, b) => b.createdAt - a.createdAt)
-      .slice(0, EXPORT_HISTORY_LIMIT)
-  } catch (_) {}
-}
-async function addExportHistory(src: string) {
-  const createdAt = Date.now()
-  const record: ExportHistoryRecord = {
-    id: `${createdAt}-${Math.random().toString(36).slice(2, 7)}`,
-    src,
-    createdAt,
-    name: `${bags[curBag.value].label}导出图`,
-    timeText: formatExportHistoryTime(createdAt),
-  }
-  exportHistory.value = [record, ...exportHistory.value].slice(0, EXPORT_HISTORY_LIMIT)
-  await persistExportHistory()
-}
 async function openExportHistory() {
   await loadExportHistory()
   resultPreviewOpen.value = false
@@ -2691,7 +2636,7 @@ function closeExportHistory() {
   exportHistoryOpen.value = false
 }
 async function previewExportHistory(record: ExportHistoryRecord) {
-  const src = record.src || await exportHistoryStore.get(record.id)
+  const src = await resolveHistorySrc(record)
   if (!src) {
     Taro.showToast({ title: '历史图片已失效', icon: 'none' })
     return
@@ -2722,7 +2667,7 @@ async function exportImage() {
     })
     if (result.ok) {
       resultSrc.value = result.src
-      await addExportHistory(result.src)
+      await addExportHistory(result.src, `${bags[curBag.value].label}导出图`)
       resultPreviewOpen.value = true
     }
   } catch (err: any) {
