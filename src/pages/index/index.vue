@@ -315,10 +315,11 @@ import {
   formatExportHistoryTime, normalizeExportRecord, dataUrlToFile, errMsgOf,
 } from './editor-export'
 import {
-  assetToMat, guessAssetShape, defaultAssetSize, placeholderColor,
+  assetToMat, guessAssetShape, placeholderColor,
   categoryPlaceholder, importedAssetBox, spuAssetLabel,
 } from './asset-helpers'
 import { useHistory } from './use-history'
+import { useUserAssets } from './use-user-assets'
 import { removeImageBackground, CutoutServiceError, CUTOUT_REASON_TEXT } from '../../services/cutout/client'
 import {
   STORAGE_KEY, STORAGE_VERSION, EXPORT_SIZE, BAG_RATIO, BOARD_LAYER_ID, WIN, ROW_PITCH,
@@ -326,7 +327,7 @@ import {
   clamp, dist, ang, cropInnerStyle,
   boundedScale, normalizeRotation, displayRotation, formatScale, formatRotation,
 } from './editor-core'
-import type { Mat, Layer, Snapshot, RowItem, CatName, BoardTransform, Shape, ImgCrop, ExportHistoryRecord, UserAsset, StoredUserAsset, StoredExportHistoryRecord } from './editor-core'
+import type { Mat, Layer, Snapshot, RowItem, CatName, BoardTransform, Shape, ImgCrop, ExportHistoryRecord, UserAsset, StoredExportHistoryRecord } from './editor-core'
 import {
   normalizeImageSize, imageSizeFromFile, imageSizeFromDataUrl,
 } from './image-measure'
@@ -348,9 +349,6 @@ const EXPORT_HISTORY_KEY = `${STORAGE_KEY}-export-history`
 const EXPORT_HISTORY_LIMIT = 8
 const EXPORT_HISTORY_DB_NAME = 'gooda-export-history'
 const EXPORT_HISTORY_STORE = 'exports'
-const USER_ASSETS_KEY = `${STORAGE_KEY}-user-assets`
-const USER_ASSETS_DB_NAME = 'gooda-user-assets'
-const USER_ASSETS_STORE = 'images'
 
 // getSystemInfoSync() 在 Dimina 原生运行时返回 null（该 API 已废弃），
 // 直接取 .windowWidth 会白屏。优先用现代的 getWindowInfo()，逐级兜底。
@@ -523,7 +521,8 @@ const importCropImageStyle = computed(() => ({
   ...importCropFrameStyle.value,
   transform: `translate(${-importCrop.x}px, ${-importCrop.y}px)`,
 }))
-const userAssets = ref<UserAsset[]>([])
+// Material-asset collection + persistence + layer-src hydration live in useUserAssets.
+const { userAssets, hydrateLayerAssetSources, persistUserAssets, loadUserAssets, removeAssetImage } = useUserAssets()
 const exportHistory = ref<ExportHistoryRecord[]>([])
 const materialAssetActionOpen = ref(false)
 const materialAssetActionId = ref('')
@@ -1643,7 +1642,7 @@ function deleteMaterialAsset() {
       userAssets.value = userAssets.value.filter((item) => item.id !== id)
       doc.layers = doc.layers.filter((layer) => layer.assetId !== id)
       if (selected.value?.assetId === id) selectedId.value = ''
-      await userAssetsStore.del(id)
+      await removeAssetImage(id)
       await persistUserAssets()
       commit()
       Taro.showToast({ title: '已删除', icon: 'none' })
@@ -2075,76 +2074,6 @@ function onMouseDown(e: any, ly: Layer) {
   )
 }
 
-const userAssetsStore = createKvStore(USER_ASSETS_DB_NAME, USER_ASSETS_STORE)
-function hydrateLayerAssetSources(layers: Layer[]) {
-  return layers.map((layer) => {
-    if (!layer.assetId || layer.src) return layer
-    const asset = userAssets.value.find((item) => item.id === layer.assetId)
-    return asset?.src ? { ...layer, src: asset.src } : layer
-  })
-}
-async function persistUserAssets() {
-  const useDb = userAssetsStore.canUse()
-  if (useDb) {
-    await Promise.all(userAssets.value.map((asset) => userAssetsStore.put(asset.id, asset.src)))
-  }
-  const stored: StoredUserAsset[] = userAssets.value.map((asset) => ({
-    id: asset.id,
-    type: asset.type,
-    sub: asset.sub,
-    label: asset.label,
-    color: asset.color,
-    w: asset.w,
-    h: asset.h,
-    shape: asset.shape,
-    crop: asset.crop,
-    source: asset.source,
-    spuId: asset.spuId,
-    createdAt: asset.createdAt,
-    updatedAt: asset.updatedAt,
-    src: useDb ? undefined : asset.src,
-  }))
-  try {
-    Taro.setStorageSync(USER_ASSETS_KEY, stored)
-  } catch (_) {
-    // Native stores full data URLs inline — hitting the storage quota here means
-    // the asset silently vanishes on next launch. Tell the user instead.
-    Taro.showToast({ title: '素材存储空间不足，最新素材可能无法保留', icon: 'none' })
-  }
-}
-async function loadUserAssets() {
-  try {
-    const records = Taro.getStorageSync(USER_ASSETS_KEY)
-    if (!Array.isArray(records)) return
-    const hydrated = await Promise.all(records.map(async (record: Partial<StoredUserAsset>) => {
-      if (!record?.id || !record.createdAt) return undefined
-      const src = record.src || await userAssetsStore.get(record.id)
-      if (!src) return undefined
-      const sub = record.sub || '其他'
-      const shape = record.shape || guessAssetShape((record.type as UserAsset['type']) || '谷子', sub)
-      const size = defaultAssetSize(sub, shape)
-      return {
-        id: record.id,
-        type: (record.type as UserAsset['type']) || '谷子',
-        sub,
-        label: record.label || sub,
-        color: record.color || '#fff',
-        w: record.w || size.w,
-        h: record.h || size.h,
-        shape,
-        src,
-        crop: record.crop,
-        source: record.source || 'import',
-        spuId: record.spuId,
-        createdAt: record.createdAt,
-        updatedAt: record.updatedAt || record.createdAt,
-      } as UserAsset
-    }))
-    userAssets.value = hydrated
-      .filter((asset): asset is UserAsset => !!asset)
-      .sort((a, b) => b.createdAt - a.createdAt)
-  } catch (_) {}
-}
 // Normalized crop rect (0~1 of the displayed image) from the current selection.
 function computeImportCropRect(): ImgCrop {
   return normalizeCropRect(importCrop, importCropImageFrame())
