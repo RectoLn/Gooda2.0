@@ -386,13 +386,7 @@ function endGesture(x: number, y: number) {
   if (phase === 'drag' && item) {
     emit('material-drag-end', item, x, y, true)
   } else if (phase === 'scroll') {
-    // 边缘联动抽屉状态：网格已在顶部还继续下滑 → 收起一级；已在底部（或内容
-    // 不足无需滚动）还继续上滑 → 展开一级。中间区域交给正常滚动/惯性。
-    const dy = y - g.sy
-    const atTop = g.scrollY0 >= -1
-    const atBottom = g.scrollY0 <= maxScroll.value + 1
-    if (dy > SHELF_EDGE_SWIPE && atTop) { emit('shelf-swipe', 'down'); return }
-    if (dy < -SHELF_EDGE_SWIPE && atBottom) { emit('shelf-swipe', 'up'); return }
+    // 松手后交给惯性滑行（滚到边缘自然停）。
     startMomentum()
   } else if (phase === 'pending' && !g.moved && item) {
     // quick tap with no movement on a card -> select
