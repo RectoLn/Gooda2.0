@@ -318,6 +318,7 @@ import {
   assetToMat, guessAssetShape, defaultAssetSize, placeholderColor,
   categoryPlaceholder, importedAssetBox, spuAssetLabel,
 } from './asset-helpers'
+import { useHistory } from './use-history'
 import { removeImageBackground, CutoutServiceError, CUTOUT_REASON_TEXT } from '../../services/cutout/client'
 import {
   STORAGE_KEY, STORAGE_VERSION, EXPORT_SIZE, BAG_RATIO, BOARD_LAYER_ID, WIN, ROW_PITCH,
@@ -530,8 +531,10 @@ const materialAssetActionLabel = computed(() => {
   const asset = userAssets.value.find((item) => item.id === materialAssetActionId.value)
   return asset?.label || '素材'
 })
-const history = ref<Snapshot[]>([])
-const redoStack = ref<Snapshot[]>([])
+// Undo/redo stack machinery lives in useHistory; snapshot/applySnapshot/save are
+// page-state-bound so they stay here and are injected (both are hoisted declarations).
+const { canUndo, canRedo, runSuppressed, pushHistory, commit, undo, redo } =
+  useHistory({ snapshot, applySnapshot, save: () => saveWork(false) })
 const showLayerDrawer = ref(false)
 const layerButtonMoving = ref(false)
 const layerDragging = ref(false)
@@ -593,8 +596,6 @@ const boardLayer = reactive<Layer>({
 })
 const hasBoardLayer = computed(() => curBoard.value >= 0)
 const selected = computed(() => selectedId.value === BOARD_LAYER_ID && hasBoardLayer.value ? boardLayer : doc.layers.find((l) => l.id === selectedId.value))
-const canUndo = computed(() => history.value.length > 1)
-const canRedo = computed(() => redoStack.value.length > 0)
 const visibleLayerList = computed(() => {
   const list = [...doc.layers].reverse()
   if (hasBoardLayer.value) list.push(boardLayer)
@@ -1103,7 +1104,6 @@ let seq = 0
 let lastLayerTs = 0
 let dragged = false
 let layerButtonSuppressTap = false
-let suppressHistory = false
 let g = { id: '', mode: '' as '' | 'move' | 'pinch', sx: 0, sy: 0, lx: 0, ly: 0, sd: 0, sa: 0, ss: 1, sr: 0 }
 let bg = { sx: 0, sy: 0, x: 0, y: 0, moved: false }
 let rg = { id: '', cx: 0, cy: 0, startDist: 1, startAngle: 0, startScale: 1, startRotation: 0, moved: false }
@@ -1180,49 +1180,26 @@ function storageSnapshot() {
   }
 }
 function applySnapshot(s: Snapshot) {
-  suppressHistory = true
-  doc.layers = hydrateLayerAssetSources(s.layers.map((l) => ({ ...l })))
-  curBoard.value = s.curBoard
-  curBag.value = s.curBag
-  showGrid.value = s.showGrid
-  syncWindowFromBag()
-  Object.assign(boardTransform, s.boardTransform || {
-    x: win.w / 2,
-    y: win.h / 2,
-    scale: boardCoverScale(),
-    rotation: 0,
-    opacity: 1,
-    locked: true,
-    flipX: false,
+  runSuppressed(() => {
+    doc.layers = hydrateLayerAssetSources(s.layers.map((l) => ({ ...l })))
+    curBoard.value = s.curBoard
+    curBag.value = s.curBag
+    showGrid.value = s.showGrid
+    syncWindowFromBag()
+    Object.assign(boardTransform, s.boardTransform || {
+      x: win.w / 2,
+      y: win.h / 2,
+      scale: boardCoverScale(),
+      rotation: 0,
+      opacity: 1,
+      locked: true,
+      flipX: false,
+    })
+    syncBoardLayerFromTransform()
+    if (selectedId.value === BOARD_LAYER_ID) {
+      if (curBoard.value < 0) selectedId.value = ''
+    } else if (selectedId.value && !doc.layers.find((l) => l.id === selectedId.value)) selectedId.value = ''
   })
-  syncBoardLayerFromTransform()
-  if (selectedId.value === BOARD_LAYER_ID) {
-    if (curBoard.value < 0) selectedId.value = ''
-  } else if (selectedId.value && !doc.layers.find((l) => l.id === selectedId.value)) selectedId.value = ''
-  suppressHistory = false
-}
-function pushHistory() {
-  if (suppressHistory) return
-  history.value.push(snapshot())
-  if (history.value.length > 50) history.value.shift()
-  redoStack.value = []
-}
-function commit() {
-  pushHistory()
-  saveWork(false)
-}
-function undo() {
-  if (!canUndo.value) return
-  const cur = history.value.pop()
-  if (cur) redoStack.value.push(cur)
-  const prev = history.value[history.value.length - 1]
-  if (prev) applySnapshot(prev)
-}
-function redo() {
-  const next = redoStack.value.pop()
-  if (!next) return
-  applySnapshot(next)
-  history.value.push(snapshot())
 }
 
 function markLayer() { lastLayerTs = Date.now() }
