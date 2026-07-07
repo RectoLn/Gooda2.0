@@ -415,10 +415,9 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sa
 }
 
 .bag-back-fill {
-   left: -18.3%;
-   top: -129.9%;
-   width: 136.7%;
-   height: 337.9%;
+   /* 几何（left/top/width/height）一律由 index.vue 的 bagBackFillStyle 内联提供：
+      有 backCrop 的痛包按裁剪定位，无 backCrop 的直接铺满窗口。此处不再写死偏移，
+      以免无 backCrop 时落到丹宁包专用的偏移上、把背板挪出窗口。 */
    max-width: none;
    max-height: none;
    z-index: 0;

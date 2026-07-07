@@ -645,17 +645,20 @@ const boardLayerInnerStyle = computed(() => ({
   transform: boardLayer.flipX ? 'scaleX(-1)' : 'none',
 }))
 const bagBackFillStyle = computed(() => {
+  // 用 px（相对当前窗口 win.w/win.h）而非百分比：Dimina 渲染器对嵌套 <image> 的
+  // 百分比 left/top/width/height 不生效（与素材卡裁剪卡走 px 分支同源问题），会让
+  // 无底板状态下背板整块不显示（空窗）。H5 上 px 与原百分比几何完全等价。
   const crop = bags[curBag.value]?.backCrop
-  if (!crop) return {}
-  const left = -(crop.x / crop.w) * 100
-  const top = -(crop.y / crop.h) * 100
-  const width = (EXPORT_SIZE / crop.w) * 100
-  const height = (EXPORT_SIZE / crop.h) * 100
+  // 无 backCrop 的痛包，其 back 素材本身就是裁好的背板面 → 直接铺满窗口。
+  if (!crop) return { left: '0px', top: '0px', width: `${win.w}px`, height: `${win.h}px` }
+  // 有 backCrop：back 是整袋图，按裁剪区把背板面对准窗口（sx/sy 把 crop 区映射到窗口）。
+  const sx = win.w / crop.w
+  const sy = win.h / crop.h
   return {
-    left: `${left}%`,
-    top: `${top}%`,
-    width: `${width}%`,
-    height: `${height}%`,
+    left: `${-crop.x * sx}px`,
+    top: `${-crop.y * sy}px`,
+    width: `${EXPORT_SIZE * sx}px`,
+    height: `${EXPORT_SIZE * sy}px`,
   }
 })
 
