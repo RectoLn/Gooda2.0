@@ -15,6 +15,13 @@ This page is the MVP mobile layer editor for 痛包 / 谷子 layout work. The cu
   - Also holds the pure scale/rotation helpers (`boundedScale`, `normalizeRotation`,
     `displayRotation`, `formatScale`, `formatRotation`, `MIN_SCALE`/`MAX_SCALE`) and the
     crop-preview sizing helpers (`cropInnerStyle`, `cropBoxFit`, `cropBoxFitPx`).
+  - Domain-model types live here too: `Mat` / `Layer` / `RowItem` plus the local-asset
+    types `UserAsset` / `StoredUserAsset` / `StoredExportHistoryRecord`.
+
+- `asset-helpers.ts`
+  - Side-effect-free material helpers lifted out of `index.vue` (no reactive-state deps):
+    `assetToMat`, `guessAssetShape`, `defaultAssetSize`, `placeholderColor`,
+    `categoryPlaceholder`, `importedAssetBox`, `spuAssetLabel`.
 
 - `image-measure.ts`
   - Pure image-dimension parsing from raw bytes (PNG IHDR / JPEG SOF + EXIF orientation),
@@ -25,6 +32,8 @@ This page is the MVP mobile layer editor for 痛包 / 谷子 layout work. The cu
 - `editor-export.ts`
   - Canvas export composition for the cross-end (H5 / mini-program) canvas path.
   - Keep export drawing details here so `index.vue` does not mix canvas composition with touch/editing logic.
+  - Also holds the pure export/save utilities: `formatExportHistoryTime`,
+    `normalizeExportRecord`, `dataUrlToFile`, `errMsgOf`, `EXPORT_FILE_NAME`.
 
 - `../../services/storage/kv-store.ts`
   - `createKvStore(dbName, storeName)` — one IndexedDB-backed string blob store (H5 only;

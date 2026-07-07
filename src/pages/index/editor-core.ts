@@ -43,6 +43,27 @@ export type RowItem =
 // One exported image kept in history. Shared by the page and ExportHistoryPanel.
 export type ExportHistoryRecord = { id: string; src: string; createdAt: number; name: string; timeText: string }
 
+// 用户导入 / 千岛导入的素材（本地素材架）。src 体积大，单独走 kv-store；
+// Stored* 为落盘形态（src 可选，回读时再从 kv-store 注入）。
+export type UserAsset = {
+  id: string
+  type: '谷子' | '装饰'
+  sub: string
+  label: string
+  color: string
+  w: number
+  h: number
+  shape: Shape
+  src: string
+  crop?: ImgCrop
+  source: 'import' | 'spu'
+  spuId?: string
+  createdAt: number
+  updatedAt: number
+}
+export type StoredUserAsset = Omit<UserAsset, 'src'> & { src?: string }
+export type StoredExportHistoryRecord = Omit<ExportHistoryRecord, 'src'> & { src?: string }
+
 // 常量
 export const STORAGE_KEY = 'gooda-editor-current-work'
 export const STORAGE_VERSION = 4

@@ -310,7 +310,14 @@ import ExportHistoryPanel from './components/ExportHistoryPanel.vue'
 import ExportPreview from './components/ExportPreview.vue'
 import ImportCropEditor from './components/ImportCropEditor.vue'
 import SpuSearchPanel from './components/SpuSearchPanel.vue'
-import { exportEditorImage, downscaleImageToDataUrl } from './editor-export'
+import {
+  exportEditorImage, downscaleImageToDataUrl,
+  formatExportHistoryTime, normalizeExportRecord, dataUrlToFile, errMsgOf,
+} from './editor-export'
+import {
+  assetToMat, guessAssetShape, defaultAssetSize, placeholderColor,
+  categoryPlaceholder, importedAssetBox, spuAssetLabel,
+} from './asset-helpers'
 import { removeImageBackground, CutoutServiceError, CUTOUT_REASON_TEXT } from '../../services/cutout/client'
 import {
   STORAGE_KEY, STORAGE_VERSION, EXPORT_SIZE, BAG_RATIO, BOARD_LAYER_ID, WIN, ROW_PITCH,
@@ -318,7 +325,7 @@ import {
   clamp, dist, ang, cropInnerStyle,
   boundedScale, normalizeRotation, displayRotation, formatScale, formatRotation,
 } from './editor-core'
-import type { Mat, Layer, Snapshot, RowItem, CatName, BoardTransform, Shape, ImgCrop, ExportHistoryRecord } from './editor-core'
+import type { Mat, Layer, Snapshot, RowItem, CatName, BoardTransform, Shape, ImgCrop, ExportHistoryRecord, UserAsset, StoredUserAsset, StoredExportHistoryRecord } from './editor-core'
 import {
   normalizeImageSize, imageSizeFromFile, imageSizeFromDataUrl,
 } from './image-measure'
@@ -515,24 +522,6 @@ const importCropImageStyle = computed(() => ({
   ...importCropFrameStyle.value,
   transform: `translate(${-importCrop.x}px, ${-importCrop.y}px)`,
 }))
-type UserAsset = {
-  id: string
-  type: '谷子' | '装饰'
-  sub: string
-  label: string
-  color: string
-  w: number
-  h: number
-  shape: Shape
-  src: string
-  crop?: ImgCrop
-  source: 'import' | 'spu'
-  spuId?: string
-  createdAt: number
-  updatedAt: number
-}
-type StoredUserAsset = Omit<UserAsset, 'src'> & { src?: string }
-type StoredExportHistoryRecord = Omit<ExportHistoryRecord, 'src'> & { src?: string }
 const userAssets = ref<UserAsset[]>([])
 const exportHistory = ref<ExportHistoryRecord[]>([])
 const materialAssetActionOpen = ref(false)
@@ -733,32 +722,6 @@ function resetBoardTransform(locked = true) {
   syncBoardLayerFromTransform()
 }
 
-function assetToMat(asset: UserAsset): Mat {
-  return {
-    type: asset.type,
-    label: asset.label,
-    color: asset.color,
-    w: asset.w,
-    h: asset.h,
-    shape: asset.shape,
-    src: asset.src,
-    crop: asset.crop,
-    assetId: asset.id,
-    sub: asset.sub,
-    spuId: asset.spuId,
-  }
-}
-
-function guessAssetShape(type: UserAsset['type'], sub: string): Shape {
-  return type === '谷子' && sub === '吧唧' ? 'circle' : 'rect'
-}
-function defaultAssetSize(sub: string, shape: Shape) {
-  if (shape === 'circle') return { w: 56, h: 56 }
-  if (sub === '立牌') return { w: 48, h: 70 }
-  if (sub === '小卡') return { w: 48, h: 66 }
-  if (sub === '色纸') return { w: 60, h: 60 }
-  return { w: 60, h: 60 }
-}
 function fallbackImportImageSize() {
   const portraitW = sys.screenWidth || sys.windowWidth || vp.w || 375
   const portraitH = sys.screenHeight || Math.max(sys.windowHeight || vp.h || 760, portraitW * 1.78)
@@ -1096,39 +1059,6 @@ function bindImportCropMouseDrag() {
 function categorySubcats(type: UserAsset['type']) {
   return (SUBCATS[type] || ['全部']).filter((item) => item !== '全部')
 }
-function placeholderColor(type: UserAsset['type'], sub: string) {
-  const guziColors: Record<string, string> = {
-    吧唧: '#E9C7CF',
-    立牌: '#BCDAD1',
-    小卡: '#E8D2B2',
-    色纸: '#C7DCE8',
-    其他: '#D8CFEA',
-  }
-  const decorColors: Record<string, string> = {
-    蝴蝶结: '#EBC4CC',
-    吧唧托: '#D7CEE9',
-    花边: '#EFE0BC',
-    丝带: '#C7DAE8',
-    其他: '#CFE0D7',
-  }
-  return type === '谷子' ? guziColors[sub] || '#E7D4DA' : decorColors[sub] || '#E3D9EC'
-}
-function categoryPlaceholder(type: UserAsset['type'], sub: string): RowItem | undefined {
-  if (sub === '全部') return undefined
-  const shape = guessAssetShape(type, sub)
-  const size = defaultAssetSize(sub, shape)
-  const mat: Mat = {
-    type,
-    label: sub,
-    color: placeholderColor(type, sub),
-    w: size.w,
-    h: size.h,
-    shape,
-    sub,
-  }
-  return { kind: 'mat', label: sub, color: mat.color, shape: mat.shape, mat }
-}
-
 const rowItems = computed<RowItem[]>(() => {
   const sc = subCat.value
   const flt = (arr: Mat[]) => (sc === '全部' ? arr : arr.filter((m) => (m.sub || '其他') === sc))
@@ -2242,13 +2172,6 @@ function computeImportCropRect(): ImgCrop {
 }
 // Layer/box size from the crop's aspect. The box aspect MUST equal the crop aspect
 // so the CSS clip renders it undistorted. circle → square.
-function importedAssetBox(shape: Shape, aspect: number): { w: number; h: number } {
-  if (shape === 'circle') return { w: 60, h: 60 }
-  const a = aspect > 0 && isFinite(aspect) ? aspect : 1
-  const max = 70
-  if (a >= 1) return { w: max, h: Math.max(20, Math.round(max / a)) }
-  return { w: Math.max(20, Math.round(max * a)), h: max }
-}
 async function createImportedAsset(src: string, options?: { type?: UserAsset['type']; sub?: string; label?: string; shape?: Shape; spuId?: string }) {
   const type: UserAsset['type'] = options?.type || (category.value === '装饰' ? '装饰' : '谷子')
   const sub = options?.sub || (subCat.value === '全部' ? '其他' : subCat.value)
@@ -2673,9 +2596,6 @@ async function runSpuSearch(keyword?: string) {
     if (seq === spuSearchSeq) spuLoading.value = false
   }
 }
-function spuAssetLabel(spu: QiandaoSpuSummary, sub: string) {
-  return (spu.title || sub).slice(0, 12) // 与导入编辑器名称输入框 maxlength 一致
-}
 async function doImportSpu(item: QiandaoSpuSummary) {
   spuImportingId.value = item.id
   try {
@@ -2798,21 +2718,6 @@ function loadWork() {
   } catch (_) {}
 }
 
-function formatExportHistoryTime(ts: number) {
-  const d = new Date(ts)
-  const pad = (n: number) => `${n}`.padStart(2, '0')
-  return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
-function normalizeExportRecord(r: Partial<StoredExportHistoryRecord>, i: number, src = r.src): ExportHistoryRecord | undefined {
-  if (!r || !src || !r.createdAt) return undefined
-  return {
-    id: r.id || `${r.createdAt}-${i}`,
-    src,
-    createdAt: r.createdAt,
-    name: r.name || '导出图',
-    timeText: formatExportHistoryTime(r.createdAt),
-  }
-}
 const exportHistoryStore = createKvStore(EXPORT_HISTORY_DB_NAME, EXPORT_HISTORY_STORE)
 async function persistExportHistory() {
   const useDb = exportHistoryStore.canUse()
@@ -2926,19 +2831,6 @@ async function exportImage() {
 function closeExportPreview() {
   resultPreviewOpen.value = false
 }
-const EXPORT_FILE_NAME = 'gooda-export.png'
-
-function dataUrlToFile(dataUrl: string, fileName = EXPORT_FILE_NAME) {
-  if (typeof atob === 'undefined' || typeof File === 'undefined') return undefined
-  const parts = dataUrl.split(',')
-  if (parts.length < 2) return undefined
-  const mime = parts[0].match(/data:([^;]+);base64/)?.[1] || 'image/png'
-  const binary = atob(parts[1])
-  const bytes = new Uint8Array(binary.length)
-  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i)
-  return new File([bytes], fileName, { type: mime })
-}
-
 function triggerH5Download(src: string, file?: File) {
   if (typeof document === 'undefined') return false
   let href = src
@@ -2984,11 +2876,6 @@ async function saveH5ExportImage(src: string) {
 function saveError(detail: string) {
   console.warn('[gooda-export] save failed', detail)
   Taro.showModal({ title: '保存失败', content: detail, showCancel: false, confirmText: '知道了' })
-}
-// Dimina 回调以 [result] 数组形态回传，取首元素拿真实 errMsg。
-function errMsgOf(err: any): string {
-  const e = Array.isArray(err) ? err[0] : err
-  return (e && (e.errMsg || e.message)) || ''
 }
 // iOS 宿主的 saveImageToPhotosAlbum 用 UIImage(contentsOfFile:) 直接打开 filePath，
 // 不解析 difile:// → 直存失败。previewImage 会把 difile 解析成真实沙盒路径并弹出

@@ -1,6 +1,6 @@
 import Taro from '@tarojs/taro'
 import { EXPORT_SIZE, boards, bags, roundRectPath, drawRoundedImage, drawCroppedRoundedImage, loadImg, srcKind } from './editor-core'
-import type { Layer } from './editor-core'
+import type { Layer, ExportHistoryRecord, StoredExportHistoryRecord } from './editor-core'
 
 type ExportEditorImageOptions = {
   canvasId: string
@@ -228,6 +228,46 @@ export async function exportEditorImage(options: ExportEditorImageOptions): Prom
     console.warn('[gooda-export] canvasToTempFilePath failed', err)
     return { ok: false, stage: 'to-temp-file-failed', detail: `canvasToTempFilePath 失败：${raw}` }
   }
+}
+
+// 导出图默认文件名（H5 分享 / 下载用）。
+export const EXPORT_FILE_NAME = 'gooda-export.png'
+
+// 导出历史时间戳 → "MM-DD HH:mm" 展示串。
+export function formatExportHistoryTime(ts: number) {
+  const d = new Date(ts)
+  const pad = (n: number) => `${n}`.padStart(2, '0')
+  return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+// 落盘记录 → 运行时记录；缺 src / createdAt 视为无效丢弃。src 单独从 kv-store 注入。
+export function normalizeExportRecord(r: Partial<StoredExportHistoryRecord>, i: number, src = r.src): ExportHistoryRecord | undefined {
+  if (!r || !src || !r.createdAt) return undefined
+  return {
+    id: r.id || `${r.createdAt}-${i}`,
+    src,
+    createdAt: r.createdAt,
+    name: r.name || '导出图',
+    timeText: formatExportHistoryTime(r.createdAt),
+  }
+}
+
+// data URL → File（H5 分享 / 下载用）；缺 atob/File 的端返回 undefined。
+export function dataUrlToFile(dataUrl: string, fileName = EXPORT_FILE_NAME) {
+  if (typeof atob === 'undefined' || typeof File === 'undefined') return undefined
+  const parts = dataUrl.split(',')
+  if (parts.length < 2) return undefined
+  const mime = parts[0].match(/data:([^;]+);base64/)?.[1] || 'image/png'
+  const binary = atob(parts[1])
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i)
+  return new File([bytes], fileName, { type: mime })
+}
+
+// Dimina 回调以 [result] 数组形态回传，取首元素拿真实 errMsg。
+export function errMsgOf(err: any): string {
+  const e = Array.isArray(err) ? err[0] : err
+  return (e && (e.errMsg || e.message)) || ''
 }
 
 class ExportStageError extends Error {
