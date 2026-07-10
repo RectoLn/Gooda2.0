@@ -292,6 +292,27 @@ async function inferAlpha(modelName, workRgb, W, H) {
   return { alpha, bin, S }
 }
 
+// iOS 相册原图是 HEIC（HEVC 编码）。sharp 预编译的 libvips 带 libheif 但没有 HEVC
+// 解码插件（专利问题，实测线上报 "No decoding plugin installed"），所以 sharp 解码
+// 失败且探测到 HEIF 容器时，用 heic-decode（libheif-js 纯 WASM，无原生依赖）解成
+// RGBA raw 再回喂 sharp。懒加载 + 捕获：包缺失只影响 HEIC 图，不拖垮其他格式。
+function isHeifContainer(buf) {
+  if (!buf || buf.length < 12 || buf.toString('ascii', 4, 8) !== 'ftyp') return false
+  const brand = buf.toString('ascii', 8, 12)
+  return ['heic', 'heix', 'hevc', 'hevx', 'heim', 'heis', 'hevm', 'hevs', 'mif1', 'msf1'].includes(brand)
+}
+async function decodeHeicToRaw(buf) {
+  let decode
+  try {
+    decode = require('heic-decode')
+  } catch (err) {
+    throw new CutoutError('bad-input', `iPhone HEIC 图片暂不支持（解码器未装载：${err.message}）`)
+  }
+  const { width, height, data } = await decode({ buffer: buf })
+  // libheif 解码时已应用 irot/imir 旋转变换，无需再按 EXIF 旋转
+  return { raw: Buffer.from(data), width, height }
+}
+
 async function runCutout(imageBuffer) {
   const { sharp, error } = loadDeps()
   if (error) throw new CutoutError('unavailable', `推理依赖未就绪：${error}`)
@@ -306,7 +327,18 @@ async function runCutout(imageBuffer) {
       .raw()
       .toBuffer({ resolveWithObject: true })
   } catch (err) {
-    throw new CutoutError('bad-input', `图片解码失败：${err.message}`)
+    if (!isHeifContainer(imageBuffer)) throw new CutoutError('bad-input', `图片解码失败：${err.message}`)
+    try {
+      const { raw, width, height } = await decodeHeicToRaw(imageBuffer)
+      work = await sharp(raw, { raw: { width, height, channels: 4 } })
+        .resize(WORK_MAX, WORK_MAX, { fit: 'inside', withoutEnlargement: true })
+        .removeAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true })
+    } catch (heicErr) {
+      if (heicErr instanceof CutoutError) throw heicErr
+      throw new CutoutError('bad-input', `HEIC 图片解码失败：${heicErr.message}`)
+    }
   }
   const { width: W, height: H } = work.info
 

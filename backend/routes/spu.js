@@ -74,6 +74,17 @@ async function handleSpuImage(req, res, query) {
   }
   try {
     const { contentType, buf } = await fetchImage(target)
+    // b64=1：以 JSON 返回 data URL。安卓/鸿蒙 Dimina 的 downloadFile 桥不可靠
+    // （回调不返回/失败），原生端 SPU 导入改用 Taro.request 走这个模式拿图，
+    // 绕开 downloadFile + 文件系统（request 桥已被搜索接口验证可用）。
+    if (String(query.b64 || '') === '1') {
+      sendJson(res, 200, {
+        code: '0',
+        message: '',
+        data: { dataUrl: `data:${contentType};base64,${buf.toString('base64')}`, mime: contentType, bytes: buf.length },
+      })
+      return
+    }
     res.writeHead(200, {
       'Content-Type': contentType,
       'Content-Length': buf.length,

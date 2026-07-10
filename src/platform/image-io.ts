@@ -175,14 +175,44 @@ export async function imageSourceToDataUrl(src: string) {
   }
 }
 
+// Our own backend image proxy can return the bytes as a data URL in JSON (?b64=1).
+// On 安卓/鸿蒙 Dimina the downloadFile bridge is unreliable (callback never returns /
+// fails), while the request bridge is proven good (SPU search uses it). So for proxy
+// URLs on native runtimes, fetch the image over request first. ''=fail (caller falls
+// through to the downloadFile path).
+async function proxyImageToDataUrlViaRequest(url: string): Promise<string> {
+  if (!/\/spu\/v1\/image\?/.test(url)) return ''
+  return await new Promise<string>((resolve) => {
+    try {
+      Taro.request({
+        url: `${url}&b64=1`,
+        method: 'GET',
+        timeout: 20000,
+        success: (res: any) => {
+          const dataUrl = res?.statusCode === 200 && res?.data && typeof res.data === 'object'
+            ? String(res.data?.data?.dataUrl || '')
+            : ''
+          resolve(dataUrl.startsWith('data:') ? dataUrl : '')
+        },
+        fail: () => resolve(''),
+      })
+    } catch (_) {
+      resolve('')
+    }
+  })
+}
+
 // Fetch a REMOTE (http/https) image into a data URL. On native runtimes fetch /
-// FileReader are unavailable and the filesystem reader cannot open URLs, so download
-// to a temp file first (downloadFile is in Dimina's adapted API list). Returns the
-// original URL unchanged when everything fails — the caller decides if that's fatal
-// (e.g. anti-hotlink CDNs / missing CORS headers on H5).
+// FileReader are unavailable and the filesystem reader cannot open URLs — prefer the
+// backend's b64 JSON mode over the request bridge, then fall back to downloading to
+// a temp file (downloadFile is in Dimina's adapted API list but broken on 安卓/鸿蒙).
+// Returns the original URL unchanged when everything fails — the caller decides if
+// that's fatal (e.g. anti-hotlink CDNs / missing CORS headers on H5).
 export async function remoteImageToDataUrl(url: string): Promise<string> {
   if (!/^https?:\/\//i.test(url)) return imageSourceToDataUrl(url)
   if (typeof fetch !== 'undefined' && typeof FileReader !== 'undefined') return imageSourceToDataUrl(url)
+  const viaRequest = await proxyImageToDataUrlViaRequest(url)
+  if (viaRequest) return viaRequest
   const temp = await new Promise<string>((resolve) => {
     try {
       Taro.downloadFile({
