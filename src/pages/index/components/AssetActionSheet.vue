@@ -1,23 +1,34 @@
+<!-- Long-press 编辑/删除 sheet for a user-imported material. Thin semantic wrapper
+     over the generic ActionSheet so the whole app shares one in-DOM sheet primitive
+     (see ActionSheet.vue for why native Taro.showActionSheet is avoided). -->
 <template>
-  <view v-if="open" class="asset-action-mask" @tap="$emit('close')">
-    <view class="asset-action-panel" @tap.stop>
-      <view class="asset-action-title">{{ label }}</view>
-      <view class="asset-action-row" @tap="$emit('edit')">编辑</view>
-      <view class="asset-action-row danger" @tap="$emit('delete')">删除</view>
-      <view class="asset-action-cancel" @tap="$emit('close')">取消</view>
-    </view>
-  </view>
+  <ActionSheet
+    :open="open"
+    :title="label"
+    :items="items"
+    @select="onSelect"
+    @close="$emit('close')"
+  />
 </template>
 
 <script setup lang="ts">
+import ActionSheet from './ActionSheet.vue'
+
 defineProps<{
   open: boolean
   label: string
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   (e: 'edit'): void
   (e: 'delete'): void
   (e: 'close'): void
 }>()
+
+const items = [{ label: '编辑' }, { label: '删除', danger: true }]
+
+function onSelect(index: number) {
+  if (index === 0) emit('edit')
+  else emit('delete')
+}
 </script>

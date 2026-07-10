@@ -238,6 +238,14 @@
       @close="closeMaterialAssetActions"
     />
 
+    <ActionSheet
+      :open="importSourceSheetOpen"
+      title="选择导入方式"
+      :items="importSourceItems"
+      @select="onImportSourceSelect"
+      @close="importSourceSheetOpen = false"
+    />
+
     <SpuSearchPanel
       :open="spuSearchOpen"
       :service-mode="spuService.mode"
@@ -306,6 +314,7 @@ import NudgeInspector from './components/NudgeInspector.vue'
 import MaterialShelf from './components/MaterialShelf.vue'
 import LayerDrawer from './components/LayerDrawer.vue'
 import AssetActionSheet from './components/AssetActionSheet.vue'
+import ActionSheet from './components/ActionSheet.vue'
 import ExportHistoryPanel from './components/ExportHistoryPanel.vue'
 import ExportPreview from './components/ExportPreview.vue'
 import ImportCropEditor from './components/ImportCropEditor.vue'
@@ -404,6 +413,7 @@ const doc = reactive<{ layers: Layer[] }>({ layers: [] })
 const selectedId = ref('')
 const resultSrc = ref('')
 const resultPreviewOpen = ref(false)
+const importSourceSheetOpen = ref(false)
 const importEditorOpen = ref(false)
 // The crop stage measures + seeds asynchronously after the editor opens. Until that
 // finishes, importCrop does not yet reflect the real selection, so saving early would
@@ -2576,20 +2586,23 @@ async function importSpuFromLibrary(item: QiandaoSpuSummary) {
   await doImportSpu(item)
 }
 
+// 自定义 ActionSheet，不用 Taro.showActionSheet —— 后者在 Dimina 安卓/鸿蒙运行时静默
+// 失效（tap 有触发，但原生 sheet 从不弹出），iOS 正常。in-DOM sheet 全端可靠，且从
+// sheet 行 tap 直接调 chooseImage 仍在用户手势栈内，满足原生取图的手势要求。
+const importSourceItems = computed(() => {
+  const rows = [{ label: '拍摄' }, { label: '相册' }]
+  // 谷子分类可另从社区资料库（SPU）导入。
+  if (category.value === '谷子') rows.unshift({ label: '社区资料库' })
+  return rows
+})
 function openImportSourceMenu() {
-  const isGuzi = category.value === '谷子'
-  const itemList = isGuzi ? ['社区资料库', '拍摄', '相册'] : ['拍摄', '相册']
-  Taro.showActionSheet({
-    itemList,
-    success: (res) => {
-      const item = itemList[res.tapIndex]
-      if (item === '社区资料库') {
-        openSpuSearch()
-        return
-      }
-      void chooseImageLayer(item === '拍摄' ? ['camera'] : ['album'])
-    },
-  })
+  importSourceSheetOpen.value = true
+}
+function onImportSourceSelect(index: number) {
+  const label = importSourceItems.value[index]?.label
+  importSourceSheetOpen.value = false
+  if (label === '社区资料库') openSpuSearch()
+  else void chooseImageLayer(label === '拍摄' ? ['camera'] : ['album'])
 }
 
 async function chooseImageLayer(sourceType: Array<'album' | 'camera'> = ['album', 'camera']) {
