@@ -48,10 +48,13 @@ function clampInt(raw, min, max, dflt) {
 
 // ---- 懒加载原生依赖 ------------------------------------------------------
 
-// 推理运行时两级：优先 onnxruntime-node（glibc 原生，最快）；加载失败（如 qdmp 线上
-// 容器是 musl/Alpine，没有 ld-linux-x86-64.so.2）自动落到 onnxruntime-web 的纯 WASM
-// 后端（不挑 libc，1024² int8 实测约 2s@4线程）。CUTOUT_FORCE_WASM=1 可强制走 WASM 验证。
-let deps = null // { ort, sharp, runtime: 'native'|'wasm' } | { error }
+// 推理运行时两级：优先 onnxruntime-node（glibc 原生，最快，run 在 ORT 自有线程池、
+// 不阻塞事件循环）；加载失败（如 qdmp 线上容器是 musl/Alpine，没有
+// ld-linux-x86-64.so.2）落到 onnxruntime-web 纯 WASM。WASM 的计算在调用线程同步
+// 执行，一次推理会把事件循环冻结数秒（线上曾拖垮 /spu/* 全部接口）——所以 WASM
+// 路径的 ort 不在主线程加载，推理走 cutout-worker.js（worker_threads）。
+// CUTOUT_FORCE_WASM=1 可强制走 WASM 验证。
+let deps = null // { ort?, sharp, runtime: 'native'|'wasm' } | { error }
 function loadDeps() {
   if (deps) return deps
   let sharp
@@ -73,18 +76,76 @@ function loadDeps() {
     }
   }
   try {
-    const ort = require('onnxruntime-web')
-    // qdmp 线上容器 ~1 vCPU 且共享：实测 1024²@4线程 20s+ 超时，512²@1线程 ~3.5-5s
-    // 且多线程纯拖慢。wasm 运行时把默认参数压到实测最优（显式 env 仍然优先）。
+    require.resolve('onnxruntime-web') // 只探测存在性；真正加载发生在 worker 里
+    // qdmp 线上容器 ~1 vCPU 且共享：实测 1024²@4线程 20s+ 超时，512²@1线程最优。
     if (!process.env.CUTOUT_INPUT_SIZE) inputSize = Math.min(inputSize, 512)
     if (!process.env.CUTOUT_THREADS) threads = 1
-    ort.env.wasm.numThreads = threads
-    deps = { ort, sharp, runtime: 'wasm' }
+    deps = { sharp, runtime: 'wasm' }
   } catch (err) {
     console.error('[cutout] onnxruntime wasm unavailable:', err.message)
     deps = { error: `onnxruntime-node: ${nativeErr} / onnxruntime-web: ${err.message}` }
   }
   return deps
+}
+
+// ---- WASM 推理 worker（见 cutout-worker.js 头注释） -----------------------
+
+let worker = null
+let workerSeq = 0
+const workerPending = new Map() // id -> { resolve, reject }
+const workerModels = new Set() // 已在 worker 里成功建过 session 的模型（健康上报用）
+
+function ensureWorker() {
+  if (worker) return worker
+  const { Worker } = require('worker_threads')
+  worker = new Worker(path.join(__dirname, 'cutout-worker.js'))
+  worker.unref() // 不阻止进程退出
+  worker.on('message', (msg) => {
+    const p = workerPending.get(msg.id)
+    if (!p) return // 超时后迟到的回包，丢弃
+    workerPending.delete(msg.id)
+    if (msg.ok) p.resolve(msg)
+    else p.reject(new CutoutError(msg.kind === 'no-subject' ? 'no-subject' : 'internal', msg.message))
+  })
+  worker.on('error', (err) => {
+    console.error('[cutout] worker crashed:', err.message)
+    failAllPending(`推理线程崩溃：${err.message}`)
+    worker = null
+  })
+  worker.on('exit', (code) => {
+    if (code !== 0) failAllPending(`推理线程退出（code ${code}）`)
+    worker = null
+  })
+  return worker
+}
+
+function failAllPending(message) {
+  for (const [, p] of workerPending) p.reject(new CutoutError('internal', message))
+  workerPending.clear()
+}
+
+// 超时/调参后重建：WASM 算不到一半没法中断，只能整个线程掐掉，防止队列后续任务
+// 排在一个已经没人等的死算后面。
+function resetWorker() {
+  if (worker) {
+    try { worker.terminate() } catch (_) {}
+    worker = null
+  }
+  failAllPending('推理线程已重置')
+}
+
+function workerInfer({ rgbS, S, modelName, modelPath }) {
+  const w = ensureWorker()
+  const id = ++workerSeq
+  return new Promise((resolve, reject) => {
+    workerPending.set(id, { resolve, reject })
+    const buf = rgbS.buffer.slice(rgbS.byteOffset, rgbS.byteOffset + rgbS.byteLength)
+    const spec = MODEL_SPECS[modelName]
+    w.postMessage({ id, rgbS: buf, S, modelName, modelPath, mean: spec.mean, std: spec.std, threads }, [buf])
+  }).then((msg) => {
+    workerModels.add(modelName)
+    return msg
+  })
 }
 
 // qdmp 发版有单文件 10MB 上限：大模型以 <10MB 分片（file.part-aa…）随包部署，
@@ -251,15 +312,22 @@ function dilate(mask, S, iters) {
 // ---- 推理主流程 -----------------------------------------------------------
 
 async function inferAlpha(modelName, workRgb, W, H) {
-  const { ort, sharp } = loadDeps()
+  const { ort, sharp, runtime } = loadDeps()
   const spec = MODEL_SPECS[modelName]
   const S = spec.size || inputSize
-  const session = await getSession(modelName)
 
   const { data: rgbS } = await sharp(workRgb, { raw: { width: W, height: H, channels: 3 } })
     .resize(S, S, { fit: 'fill' })
     .raw()
     .toBuffer({ resolveWithObject: true })
+
+  if (runtime === 'wasm') {
+    // WASM 的计算同步占住调用线程 → 挪到 worker，主线程事件循环保持响应
+    const msg = await workerInfer({ rgbS, S, modelName, modelPath: ensureModelPath(spec.file) })
+    return { alpha: new Float32Array(msg.alpha), bin: new Uint8Array(msg.bin), S }
+  }
+
+  const session = await getSession(modelName)
 
   // HWC u8 → CHW f32 归一化
   const plane = S * S
@@ -473,6 +541,10 @@ function removeBackground(imageBuffer) {
     } catch (err) {
       stats.totalFails++
       stats.lastError = err.message
+      // WASM 死算没法中断：超时后掐掉 worker，别让队列后续任务排在僵尸计算后面
+      if (err instanceof CutoutError && err.kind === 'timeout' && deps && deps.runtime === 'wasm') {
+        resetWorker()
+      }
       throw err
     }
   })
@@ -488,12 +560,28 @@ async function healthInfo(warm) {
     threads,
     queueLength,
     ...stats,
-    modelsLoaded: Object.keys(sessions),
+    modelsLoaded: d.runtime === 'wasm' ? [...workerModels] : Object.keys(sessions),
   }
   if (warm && !d.error) {
     try {
-      await getSession('isnet')
-      info.modelsLoaded = Object.keys(sessions)
+      if (d.runtime === 'wasm') {
+        // 预热 = 让 worker 建好 isnet session：喂一张 64² 的迷你图跑通全链
+        const S = 64
+        const rgbS = new Uint8Array(S * S * 3)
+        for (let i = 0; i < rgbS.length; i++) rgbS[i] = (i * 7) & 0xff
+        await withTimeout(
+          workerInfer({ rgbS, S, modelName: 'isnet', modelPath: ensureModelPath(MODEL_SPECS.isnet.file) }),
+          JOB_TIMEOUT_MS,
+        ).catch((err) => {
+          // no-subject 也算预热成功（session 已建好），其余错误上抛
+          if (!(err instanceof CutoutError && err.kind === 'no-subject')) throw err
+          workerModels.add('isnet')
+        })
+        info.modelsLoaded = [...workerModels]
+      } else {
+        await getSession('isnet')
+        info.modelsLoaded = Object.keys(sessions)
+      }
       info.warmed = true
     } catch (err) {
       info.available = false
@@ -515,12 +603,22 @@ function setTuning({ size, threads: th }) {
     const v = clampInt(th, 1, 8, threads)
     if (v !== threads) {
       threads = v
-      if (deps && deps.runtime === 'wasm') deps.ort.env.wasm.numThreads = threads
       changed = true
     }
   }
-  if (changed) for (const k of Object.keys(sessions)) delete sessions[k]
+  if (changed) {
+    for (const k of Object.keys(sessions)) delete sessions[k]
+    // WASM 线程池初始化后改不了线程数 → 直接重建 worker（size 变化也顺带清 session）
+    if (deps && deps.runtime === 'wasm') {
+      resetWorker()
+      workerModels.clear()
+    }
+  }
   return { inputSize, threads, changed }
 }
 
-module.exports = { removeBackground, healthInfo, setTuning, CutoutError }
+module.exports = {
+  removeBackground, healthInfo, setTuning, CutoutError,
+  // 供 /image/v1/ingest 共享的解码工具（sharp 无 HEVC 插件 → heic-decode 前置解码）
+  isHeifContainer, decodeHeicToRaw,
+}
