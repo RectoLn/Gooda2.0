@@ -342,7 +342,7 @@ import {
 } from './image-measure'
 import { cropImageFrame, normalizeCropRect, denormalizeCropRect } from './crop-math'
 import { measureRect } from '../../platform/measure'
-import { imageSizeFromLocalFile, imageSourceToDataUrl, remoteImageToDataUrl, saveImageNativeSmart } from '../../platform/image-io'
+import { imageSizeFromLocalFile, imageSourceToDataUrl, ingestImageViaUpload, remoteImageToDataUrl, saveImageNativeSmart } from '../../platform/image-io'
 import { resolveQiandaoSpuService, QiandaoSpuServiceError } from '../../services/qiandao/client'
 import { bestSpuImage, inferGuziSubFromSpu, isSeriesSpu, weightedShuffleSpus } from '../../services/qiandao/types'
 import type { QiandaoSpuSummary } from '../../services/qiandao/types'
@@ -2614,6 +2614,19 @@ async function chooseImageLayer(sourceType: Array<'album' | 'camera'> = ['album'
       const src = res.tempFilePaths && res.tempFilePaths[0]
       if (!src) return
       const fileSize = imageSizeFromFile((res as any).tempFiles && (res as any).tempFiles[0])
+      // 原生端优先把文件直传后端 ingest（uploadFile 由原生读文件）：
+      // - iOS 的 fs.readFile 对相册/拍摄临时文件直接失败（相册、拍摄都报"图片处理失败"）
+      // - 安卓/鸿蒙 readFile 整图 base64 过桥 = 长卡顿 + 概率闪退
+      // 返回的小图 data URL + 精确尺寸直接喂编辑器（免测量）。失败退回 readFile 老路，
+      // 离线导入仍可用。H5 保持 fetch 老路（无此桥问题，且离线可用）。
+      if (process.env.TARO_ENV !== 'h5') {
+        Taro.showLoading({ title: '处理中…' })
+        const ingested = await ingestImageViaUpload(src).finally(() => Taro.hideLoading())
+        if (ingested) {
+          await openImportEditor(ingested.dataUrl, { width: ingested.width, height: ingested.height })
+          return
+        }
+      }
       await openImportEditor(src, fileSize)
     },
     fail: () => Taro.showToast({ title: '未选择图片', icon: 'none' }),

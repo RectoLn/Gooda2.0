@@ -31,7 +31,10 @@ async function requestJson(url: string): Promise<any> {
   }
   const status = res?.statusCode || 0
   if (status < 200 || status >= 300) {
-    throw new QiandaoSpuServiceError(`资料库服务异常（HTTP ${status || '无响应'}）`, 'server')
+    // 后端的 5xx body 带具体原因（如"SPU 服务未就绪：appSecret 未配置"）——透传出来,
+    // 否则排障只能看到一个裸 HTTP 状态码（曾因此把配置事故误判成安卓端问题）。
+    const detail = res?.data && typeof res.data === 'object' && res.data.message ? `：${res.data.message}` : ''
+    throw new QiandaoSpuServiceError(`资料库服务异常（HTTP ${status || '无响应'}）${detail}`, 'server')
   }
   const body = res.data
   if (body && typeof body === 'object' && 'code' in body && String(body.code) !== '0') {

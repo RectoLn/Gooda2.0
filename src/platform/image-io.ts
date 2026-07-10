@@ -1,5 +1,6 @@
 import Taro from '@tarojs/taro'
 import { imageSizeFromBytes, base64ToBytes } from '../pages/index/image-measure'
+import { cutoutServiceBase } from '../services/cutout/client'
 
 // Cross-end image IO wrappers (Taro filesystem / fetch / canvas). No reactive or
 // page state — just source-string in, result out. Extracted from index.vue.
@@ -16,7 +17,8 @@ export async function imageSizeFromLocalFile(src: string) {
       success: (res: any) => {
         const data = res?.data
         if (data instanceof ArrayBuffer) { resolve(imageSizeFromBytes(new Uint8Array(data))); return }
-        if (typeof data === 'string') { resolve(imageSizeFromBytes(base64ToBytes(data))); return }
+        // 尺寸在文件头里,只解前 256KB(全量解码大图 base64 会同步卡死 JS 线程)
+        if (typeof data === 'string') { resolve(imageSizeFromBytes(base64ToBytes(data, 256 * 1024))); return }
         resolve(undefined)
       },
       fail: () => resolve(undefined),
@@ -173,6 +175,45 @@ export async function imageSourceToDataUrl(src: string) {
       img.src = src
     })
   }
+}
+
+// Send a picked local image to the backend's /image/v1/ingest via Taro.uploadFile and
+// get back a downsized data URL + exact pixel size. This is the PREFERRED native import
+// path because it never touches getFileSystemManager.readFile — which fails outright
+// for album/camera temp files on iOS Dimina ("图片处理失败"), and on 安卓/鸿蒙 stringifies
+// multi-MB base64 across the bridge (long UI freeze + occasional crash). uploadFile
+// streams the file from native code. Returns undefined on any failure — callers fall
+// back to the readFile pipeline (keeps offline import working).
+export async function ingestImageViaUpload(
+  filePath: string,
+): Promise<{ dataUrl: string; width: number; height: number } | undefined> {
+  if (!filePath || filePath.startsWith('data:')) return undefined
+  const base = cutoutServiceBase()
+  if (!base) return undefined
+  return await new Promise((resolve) => {
+    try {
+      Taro.uploadFile({
+        url: `${base}/image/v1/ingest`,
+        filePath,
+        name: 'file',
+        timeout: 30000,
+        success: (res: any) => {
+          try {
+            const body = typeof res?.data === 'string' ? JSON.parse(res.data) : res?.data
+            const d = body?.data
+            if (res?.statusCode === 200 && String(body?.code) === '0' && typeof d?.dataUrl === 'string' && d.dataUrl.startsWith('data:')) {
+              resolve({ dataUrl: d.dataUrl, width: Number(d.width) || 0, height: Number(d.height) || 0 })
+              return
+            }
+          } catch (_) {}
+          resolve(undefined)
+        },
+        fail: () => resolve(undefined),
+      })
+    } catch (_) {
+      resolve(undefined)
+    }
+  })
 }
 
 // Our own backend image proxy can return the bytes as a data URL in JSON (?b64=1).

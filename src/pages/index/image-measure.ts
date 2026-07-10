@@ -19,23 +19,36 @@ export function imageSizeFromFile(file: any) {
   )
 }
 
-const base64Chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-export function base64ToBytes(base64: string) {
-  const clean = base64.replace(/[\r\n\s=]/g, '')
-  const bytes: number[] = []
+// 查表 + 预分配的 base64 解码。曾经是逐字符 indexOf + number[] push——一张相册照片
+// 的 4MB base64 要循环 400 万次、装箱 400 万个 Number（内存瞬时膨胀数十 MB），在安卓
+// 真机上同步卡死 JS 线程数秒、内存紧张时直接闪退。maxBytes 用于"只要文件头"的场景
+// （解析图片尺寸只需要前几十 KB，见 imageSizeFromDataUrl）。
+const base64Lut = (() => {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+  const lut = new Int8Array(256).fill(-1)
+  for (let i = 0; i < chars.length; i += 1) lut[chars.charCodeAt(i)] = i
+  return lut
+})()
+export function base64ToBytes(base64: string, maxBytes?: number) {
+  const cap = maxBytes && maxBytes > 0 ? maxBytes : Infinity
+  // 预分配上限：min(理论输出, cap)。含空白/填充时实际输出更小，最后 subarray 截齐。
+  const alloc = Math.min(Math.floor((base64.length * 3) / 4) + 3, cap === Infinity ? Infinity : cap)
+  const bytes = new Uint8Array(alloc === Infinity ? Math.floor((base64.length * 3) / 4) + 3 : alloc)
+  let n = 0
   let buffer = 0
   let bits = 0
-  for (let i = 0; i < clean.length; i += 1) {
-    const val = base64Chars.indexOf(clean[i])
-    if (val < 0) continue
+  for (let i = 0; i < base64.length; i += 1) {
+    const val = base64Lut[base64.charCodeAt(i)]
+    if (val < 0) continue // 跳过空白/=/非法字符
     buffer = (buffer << 6) | val
     bits += 6
     if (bits >= 8) {
       bits -= 8
-      bytes.push((buffer >> bits) & 0xff)
+      bytes[n++] = (buffer >> bits) & 0xff
+      if (n >= cap) break
     }
   }
-  return new Uint8Array(bytes)
+  return n === bytes.length ? bytes : bytes.subarray(0, n)
 }
 function readU32BE(bytes: Uint8Array, offset: number) {
   return ((bytes[offset] << 24) | (bytes[offset + 1] << 16) | (bytes[offset + 2] << 8) | bytes[offset + 3]) >>> 0
@@ -108,8 +121,16 @@ export function imageSizeFromBytes(bytes: Uint8Array) {
   }
   return undefined
 }
+// 尺寸解析只需要文件头：PNG IHDR 在前 24 字节；JPEG 的 SOF 通常在 EXIF（含缩略图，
+// 可达 64-128KB）之后不远。先解 256KB，罕见的"SOF 极靠后"再全量兜底——避免为读个
+// 宽高把整张照片的 base64 解一遍（安卓真机卡顿/闪退的元凶之一）。
+const HEADER_BYTES = 256 * 1024
 export function imageSizeFromDataUrl(src: string) {
   const comma = src.indexOf(',')
   if (comma < 0 || !src.slice(0, comma).includes('base64')) return undefined
-  return imageSizeFromBytes(base64ToBytes(src.slice(comma + 1)))
+  const b64 = src.slice(comma + 1)
+  const head = imageSizeFromBytes(base64ToBytes(b64, HEADER_BYTES))
+  if (head) return head
+  if (b64.length <= (HEADER_BYTES * 4) / 3) return undefined // 已经是全量了
+  return imageSizeFromBytes(base64ToBytes(b64))
 }
